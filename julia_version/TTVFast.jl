@@ -4,8 +4,8 @@
 #/ Main TTVFast file, which takes in the initial conditions, masses, G, timestep, t0, total amount of time, number of planets, number of RV measurements, size of Transit structure, and the RV and Transit structures. This is where the integration is formed & the transit times, rsky & vsky at transit, and RV at an observation time are calculated. Note that things called "helio" or "heliocentric" really should be "astrocentric". 
 
 #define MAX_N_PLANETS 9
-#include"myintegrator.h"
-#include"transit.h"
+include("myintegrator.jl")
+include("transit.h")
 #define TOLERANCE 1e-10
 #define MAX_ITER 35
 #define BAD_TRANSIT -1

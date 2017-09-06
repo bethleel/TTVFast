@@ -45,7 +45,7 @@ function keplerian(Real::gm,PhaseState::state,Real::a,Real::ecc,Real::i,Real::lo
   cosnode = cos(longnode);
   sinnode = sin(longnode);
 
-  #* u is the argument of latitude */
+  #* u is the argument of latitude *
   rcosu = state.x * cosnode + state.y * sinnode;
   rsinu = (state.y * cosnode - state.x * sinnode)/cos(i);
 

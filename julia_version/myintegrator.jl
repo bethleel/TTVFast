@@ -1,4 +1,4 @@
-//Here are some other parameters used.
+#Here are some other parameters used.
 
 #include <stdio.h>
 #include <math.h>

@@ -1,0 +1,13 @@
+# (((1,2),3),(4,5))
+# Set up Keplerian hierarchy:
+nbody = 5
+indices = [[1,-1, 0, 0, 0],  # first two bodies orbit in a binary
+           [1, 1,-1, 0, 0],  # first three are a hierarchical triple
+           [0, 0, 0, 1,-1],  # last two orbit in a binary
+           [1, 1, 1,-1,-1],  # orbit between triple & binary
+           [1, 1, 1, 1, 1]]  # center of mass of the system
+# Now, specify initial masses & orbital elements of each level of hierarchy:
+mass=[1.0,1e-6,3e-6,1e-3,1e-7]
+# p1 t01 ecos1 esin1 inc1 om1
+
+

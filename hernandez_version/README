@@ -1,0 +1,137 @@
+8/9/17
+Implementing Wisdom & Hernandez (2015) Universal Kepler solver.
+
+So far it doesn't seem to converge as fast as a standard Kepler
+solver for the elliptic case.
+
+8/9/17
+Okay, elliptic case seems to work, and one iteration of quartic
+extrapolation gets me within ~machine precision!
+
+Now for hyperbolic case...  I need to rederive everything.
+WH's small-angle concern I don't think is a big issue in practice
+(of course, unless there is a large period ratio so that outer
+planets have to take small steps... maybe I should stick to
+half-angles).
+
+Also need to code up parabolic case (cubic equation):
+
+y(s) = s^3 + 3*r0*s^2*dr0dt/k + 6r0*s/k -6h/k
+     = s^3 + a s^2 + b s + c
+   with a = 3*r0*dr0dt/k, b=6*r0/k, c = -6h/k
+
+Q = r0^2*dr0dt^2/k^2 - 2r0/k
+R = r0^3*dr0dt^3/k^3 - 3*r0^2*dr0dt/k^2 - 3*h/k
+
+Q: If there are three real roots, which one do we choose?
+
+8/10/2017
+Okay, I got the hyperbolic case working!
+
+Now, for the parabolic (although this should almost never occur in practice...).
+
+Problem: quickly get NaNs since beta becomes slightly less than
+zero (presumably due to rounding error).
+
+Okay, got parabolic case working.  It is called if beta is within ~10^{-15}
+of zero.
+
+8/11/2017
+Not sure what is going on with allocations...  this seems to always
+trip me up.  Dan figured out how to rewrite celerite without as
+much memory allocation;  it might be worth looking at that code.
+
+10^6 steps in 4-5 seconds;  not great compared with what Hernandez finds.
+Wonder if this is related to the memory allocation problem?
+
+8/12/2017
+Why is test_elliptic getting zeros back for r & beta_final???!
+
+Julia is a mystery...
+
+8/12/2017
+test_elliptic.jl gives ~0.2 \mu sec for each call to kepler_solver_elliptic.
+For 800 days of trappist-1, this gives ~800/1.5*20*28*2e-7 ~ 0.06 sec; not
+great.... plus, this could be higher since FB algorithm takes steps
+back & forth, and there may be more than one iteration in some cases.
+
+8/14/2017
+Okay, so I have some problems with Julia:
+1).  If I pass out a tuple, then this is handled with type-unstable operations, slowing things down.
+2).  If there are variables which I pass through, then these are type-unstable.
+3).  But, otherwise I need to define new variables in the routine, which takes overhead.
+
+I tried using a Type to bundle these, but then I need to instantiate the type within the
+routine, which takes too much time.
+
+There has to be some way to pre-allocate variables for Julia so I don't have to waste time
+defining variables all of the time!
+
+Okay, so I settled on passing a state vector - this avoids the need to define a new type -
+and then I just save the final state at the end of the step to this vector.  Not as elegant
+or readable, but it's the fastest yet: 0.2 microseconds per Kepler step (one iteration).
+
+8/15/2017
+
+I corrected a mistake in comp_ds_opt, and made some other other changes
+to decrease the number of operations.  Reduced speed by ~10%.
+
+When I take larger timesteps, the total run time doesn't grow significantly
+with two iterations per step.
+
+I wonder if it would be quicker to solve cubic equation for the initial step guess? [ ]
+
+Okay, I've rewritten kepler_solver_hyperbolic.jl, and now combined
+kepler_solver_elliptic.jl and kepler_solver_hyperbolic.jl into kepler_solver.jl
+(they use the function in common calc_cs_opt).
+
+Both seem to preserve beta well, and take about 0.3 microseconds for each step
+when the eccentricity is modest!
+
+Onward to carrying out symplectic integrator:
+
+1). Figure out COM coordinates & drift operations.
+2). Figure out how to compute whether a transit has occured.
+3). Figure out cartesian coordinates.
+4). Write the basic operator code for a pair of planets.
+
+8/30/2017
+
+1). See whether I can reproduce Hernandez' code in Julia, and try out the
+eccentric binary planet problem. [x]
+2). Does cubic initial estimate speed things up, or slow it down? [ ]
+3). Then, figure out TTVs and benchmark. [ ]
+
+Then, try it out for a planet-moon system orbiting a binary star! [ ]
+
+Okay, I've translated nbody.c to nbody.jl (with a bit more work needed for the
+main function).  Next, I need to try running to see if it gives same results with
+my Kepler solver!
+
+8/31/2017
+Okay, I got the Julia translation done.  Now for debugging next!
+
+Code seems to be debugged, and agrees (for the most part) with David's. [x]
+
+Next, I need to
+1). Add in extrapolation of s from prior steps; [ ]
+2). Enable finding transit times; [ ]
+3). Set up initial conditions. [ ]
+    - This involves coming up with a means of specifying a hierarchical N-body system.
+Then, take derivatives, and optimize fits to T-1!
+
+9/5/2017
+
+Okay, now I need to set up the initial conditions.  I'm planning
+to use the parentheses notation from Milani & Nobili (1983),
+and to use the matrix notation of Hamers & Portegies Zwart (2016).
+
+Tasks:
+1).  Parse the hierarchy.  [ ]
+2).  Compute the A matrix. [ ]
+3).  Invert the matrix.    [ ]
+4).  Compute the semi-major axis for each Kepler problem. [ ]
+5).  Compute the cartesian elements & velocities for each Keplerian. [ ]
+6).  Compute the initial positions & velocities. [ ]
+7).  Couple to the integrator. [ ]
+8).  Compute transit times. [ ]
