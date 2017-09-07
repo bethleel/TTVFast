@@ -41,8 +41,8 @@ amat = zeros(Float64,n_body,n_body)
 # Mass vector:
 mass = vcat(elements[:,1])
 # Set up array for orbital positions of each Keplerian:
-rkepler = zeros(NDIM,nbody)
-rdotkepler = zeros(NDIM,nbody)
+rkepler = zeros(Float64,NDIM,n_body)
+rdotkepler = zeros(Float64,NDIM,n_body)
 # Fill in the A matrix & compute the Keplerian elements:
 for i=1:n_body-1
   # Sums of masses for two components of Keplerian:
@@ -84,7 +84,7 @@ for i=1:n_body
   for j=1:NDIM
     for k=1:n_body
       x[j,i] += ainv[i,k]*rkepler[j,k]
-      v[j,i] += ainv[i,k]*dotrkepler[j,k]
+      v[j,i] += ainv[i,k]*rdotkepler[j,k]
     end
   end
 end

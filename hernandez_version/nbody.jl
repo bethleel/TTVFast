@@ -2,8 +2,8 @@
 # system with BH15 integrator.  Please cite Hernandez & Bertschinger (2015)
 # if using this in a paper.
 
-const GNEWT = 39.4845
 const YEAR  = 365.242
+const GNEWT = 39.4845/YEAR^2
 const NDIM  = 3
 const third = 1./3.
 include("kepler_step.jl")
@@ -11,7 +11,7 @@ include("init_nbody.jl")
 
 function nbody(t0::Float64,h::Float64,tmax::Float64)
 fcons = open("fcons.txt","w");
-n=3
+n=8
 m=zeros(n)
 x=zeros(NDIM,n)
 v=zeros(NDIM,n)
@@ -21,16 +21,22 @@ xcm0=zeros(NDIM)
 ssave = zeros(n,n,3)
 # Read in the initial orbital elements from a file (this
 # should be moved to an input parameter):
-elements = readdlm("elements.txt")
+elements = readdlm("elements.txt",',')
+for i=1:n
+  m[i] = elements[i,1]
+end
 # Initialize the N-body problem using nested hierarchy of Keplerians:
 x,v = init_nbody(elements,t0,n)
 #    infig1!(m,x,v,n)
 # Compute the conserved quantities:
 E0=consq!(m,x,v,n,L0,p0,xcm0)
+println("E0: ",E0," L0: ",L0," p0: ",p0," xcm0: ",xcm0)
+read(STDIN,Char)
 # Set the time to the initial time:
 t = t0
 # Set step counter to zero:
 i=0
+nstep = 100
 # Loop over time steps:
 while t < t0+tmax
   # Increment time by the time step:
@@ -39,11 +45,11 @@ while t < t0+tmax
   i +=1
   # Carry out a phi^2 mapping step:
   phi2!(x,v,h,m,n)
-  # Every thousand steps, output the state of the system:
-  if mod(i,1000) == 0
+  # Every nstep steps, output the state of the system:
+  if mod(i,nstep) == 0
     state_string = ""
     for j=1:n
-      state_string = string(state_string,@sprintf("%16.12f",x[1,j]),@sprintf("%16.12f",x[2,j]),@sprintf("%16.12f",v[1,j]),@sprintf("%16.12f",v[2,j]))
+      state_string = string(state_string,@sprintf("%18.12f",x[1,j]),@sprintf("%18.12f",x[3,j]),@sprintf("%18.12f",v[1,j]),@sprintf("%18.12f",v[3,j]))
     end
     state_string = state_string*"\n"
     print(fcons,state_string)
@@ -186,9 +192,9 @@ end
 # Computes conserved quantities:
 function consq!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},n::Int64,
               L::Array{Float64,1},p::Array{Float64,1},xcm::Array{Float64,1})
-p=zeros(NDIM)
+p  =zeros(NDIM)
 xcm=zeros(NDIM)
-L=zeros(NDIM)
+L  =zeros(NDIM)
 E = 0.0
 for i=1:n
   if m[i] != 0
@@ -221,5 +227,8 @@ if mt != 0
     p[i] /= mt;
   end
 end
+println("L: ",L)
+println("p: ",p)
+println("xcm: ",xcm)
 return E
 end
