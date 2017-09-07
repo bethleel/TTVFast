@@ -116,7 +116,7 @@ Code seems to be debugged, and agrees (for the most part) with David's. [x]
 Next, I need to
 1). Add in extrapolation of s from prior steps; [ ]
 2). Enable finding transit times; [ ]
-3). Set up initial conditions. [ ]
+3). Set up initial conditions. [x]
     - This involves coming up with a means of specifying a hierarchical N-body system.
 Then, take derivatives, and optimize fits to T-1!
 
@@ -127,11 +127,11 @@ to use the parentheses notation from Milani & Nobili (1983),
 and to use the matrix notation of Hamers & Portegies Zwart (2016).
 
 Tasks:
-1).  Parse the hierarchy.  [ ]
-2).  Compute the A matrix. [ ]
-3).  Invert the matrix.    [ ]
-4).  Compute the semi-major axis for each Kepler problem. [ ]
-5).  Compute the cartesian elements & velocities for each Keplerian. [ ]
-6).  Compute the initial positions & velocities. [ ]
+1).  Parse the hierarchy.  [x] (sort of - just for planetary configuration)
+2).  Compute the A matrix. [x]
+3).  Invert the matrix.    [x]
+4).  Compute the semi-major axis for each Kepler problem. [x]
+5).  Compute the cartesian elements & velocities for each Keplerian. [x]
+6).  Compute the initial positions & velocities. [x]
 7).  Couple to the integrator. [ ]
 8).  Compute transit times. [ ]

@@ -1,5 +1,6 @@
 # Translation of David Hernandez's nbody.c for integrating hiercharical
-# system with BH15 integrator.
+# system with BH15 integrator.  Please cite Hernandez & Bertschinger (2015)
+# if using this in a paper.
 
 const GNEWT = 39.4845
 const YEAR  = 365.242

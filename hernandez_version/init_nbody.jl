@@ -1,3 +1,5 @@
+include("kepler_init.jl")
+
 # Initializes N-body integration for a planet-parallel hierarchical system 
 # (see Hamers & Portugies-Zwart 2016 (HPZ16); Beust 2003).
 # We want to define a "simplex" hierarchy which can be decomposed into N-1 Keplerian binaries.
@@ -22,7 +24,7 @@ function init_nbody(n_body,elements,t0)
 # the "_plane" is to remind us that this is currently plane-parallel, so inclination & Omega are zero
 n_level = n_body-1
 # Input -
-# elements: masses & orbital elements for each Keplerian (in this case, each planet)
+# elements: masses & orbital elements for each Keplerian (in this case, each planet plus star)
 # Output -
 # x: n_body x 3 array of positions  of each planet.
 # v: n_body x 3 array of velocities "   "      "
@@ -33,7 +35,8 @@ n_level = n_body-1
 # Get the indices:
 indices = get_indices_planetary(n_body)
 # Set up "A" matrix (Hamers & Portegies-Zwart 2016) which transforms from
-# cartesian coordinates to Keplerian orbits.
+# cartesian coordinates to Keplerian orbits (we are using opposite sign
+# convention of HPZ16, for example, r_1 = R_2-R_1).
 amat = zeros(Float64,n_body,n_body)
 # Mass vector:
 mass = vcat(elements[:,1])
@@ -54,7 +57,7 @@ for i=1:n_body-1
     end
   end
   # Compute Kepler problem: r is a vector of positions of "body" 2 with respect to "body" 1; rdot is velocity vector
-  r,rdot = kepler_init(elements[],m1,m2)
+  r,rdot = kepler_init(t0,m1+m2,elements[i+1,2:5])
   for j=1:3
     rkepler[j,i] = r[j]
     rdotkepler[j,i] = rdot[j]
@@ -62,10 +65,10 @@ for i=1:n_body-1
   # Now, fill in the A matrix
   for j=1:n_body
     if indices[i,j] == 1
-      amat[i,j] = mass[j]/m1
+      amat[i,j] = -mass[j]/m1
     end
     if indices[i,j] == -1
-      amat[i,j] = -mass[j]/m2
+      amat[i,j] =  mass[j]/m2
     end
   end
 end
@@ -75,8 +78,17 @@ for j=1:n_body
 end
 ainv = inv(amat)
 # Now, compute the Cartesian coordinates (eqn A6 from HPZ16):
-x = *(ainv,rkepler)
-v = *(ainv,rdotkepler)
+x = zeros(Float64,3,n_body)
+v = zeros(Float64,3,n_body)
+for i=1:n_body
+  for j=1:3
+    for k=1:n_body
+      x[j,i] += ainv[i,k]*rkepler[j,k]
+      v[j,i] += ainv[i,k]*dotrkepler[j,k]
+    end
+  end
+end
+#v = *(ainv,rdotkepler)
 return x,v
 end
 
@@ -85,19 +97,19 @@ function get_indices_planetary(n_body)
 indices = zeros(Int64,n_body,n_body)
 for i=1:n_body-1
  for j=1:i
-  indices[i,j]=1
+  indices[i,j ]=-1
  end
- indices[i,i+1]=-1
+ indices[i,i+1]= 1
  indices[n_body,i]=1
 end
 # This is an example for TRAPPIST-1
-# indices = [[1,-1, 0, 0, 0, 0, 0, 0],  # first two bodies orbit in a binary
-#            [1, 1,-1, 0, 0, 0, 0, 0],  # next planet orbits about these
-#            [1, 1, 1,-1, 0, 0, 0, 0],  # etc...
-#            [1, 1, 1, 1,-1, 0, 0, 0],
-#            [1, 1, 1, 1, 1,-1, 0, 0],
-#            [1, 1, 1, 1, 1, 1,-1, 0],
-#            [1, 1, 1, 1, 1, 1, 1,-1],
-#            [1, 1, 1, 1, 1, 1, 1, 1]  # center of mass of the system
+# indices = [[-1, 1, 0, 0, 0, 0, 0, 0],  # first two bodies orbit in a binary
+#            [-1,-1, 1, 0, 0, 0, 0, 0],  # next planet orbits about these
+#            [-1,-1,-1, 1, 0, 0, 0, 0],  # etc...
+#            [-1,-1,-1,-1, 1, 0, 0, 0],
+#            [-1,-1,-1,-1,-1, 1, 0, 0],
+#            [-1,-1,-1,-1,-1,-1, 1, 0],
+#            [-1,-1,-1,-1,-1,-1,-1, 1],
+#            [ 1, 1, 1, 1, 1, 1, 1, 1]  # center of mass of the system
 return indices
 end
