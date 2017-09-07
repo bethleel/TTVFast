@@ -20,14 +20,14 @@ include("kepler_init.jl")
 #  - We compute the N-body positions with each Keplerian connection (one at each level), starting
 #    at the bottom and moving upwards.
 #  
-function init_nbody(n_body,elements,t0)
+function init_nbody(elements,t0,n_body)
 # the "_plane" is to remind us that this is currently plane-parallel, so inclination & Omega are zero
 n_level = n_body-1
 # Input -
 # elements: masses & orbital elements for each Keplerian (in this case, each planet plus star)
 # Output -
-# x: n_body x 3 array of positions  of each planet.
-# v: n_body x 3 array of velocities "   "      "
+# x: n_body x NDIM array of positions  of each planet.
+# v: n_body x NDIM array of velocities "   "      "
 #
 # Read in the orbital elements:
 # elements = readdlm("elements.txt",',')
@@ -41,8 +41,8 @@ amat = zeros(Float64,n_body,n_body)
 # Mass vector:
 mass = vcat(elements[:,1])
 # Set up array for orbital positions of each Keplerian:
-rkepler = zeros(3,nbody)
-rdotkepler = zeros(3,nbody)
+rkepler = zeros(NDIM,nbody)
+rdotkepler = zeros(NDIM,nbody)
 # Fill in the A matrix & compute the Keplerian elements:
 for i=1:n_body-1
   # Sums of masses for two components of Keplerian:
@@ -58,7 +58,7 @@ for i=1:n_body-1
   end
   # Compute Kepler problem: r is a vector of positions of "body" 2 with respect to "body" 1; rdot is velocity vector
   r,rdot = kepler_init(t0,m1+m2,elements[i+1,2:5])
-  for j=1:3
+  for j=1:NDIM
     rkepler[j,i] = r[j]
     rdotkepler[j,i] = rdot[j]
   end
@@ -78,10 +78,10 @@ for j=1:n_body
 end
 ainv = inv(amat)
 # Now, compute the Cartesian coordinates (eqn A6 from HPZ16):
-x = zeros(Float64,3,n_body)
-v = zeros(Float64,3,n_body)
+x = zeros(Float64,NDIM,n_body)
+v = zeros(Float64,NDIM,n_body)
 for i=1:n_body
-  for j=1:3
+  for j=1:NDIM
     for k=1:n_body
       x[j,i] += ainv[i,k]*rkepler[j,k]
       v[j,i] += ainv[i,k]*dotrkepler[j,k]
