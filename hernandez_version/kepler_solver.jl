@@ -35,6 +35,7 @@ if beta0 > 1e-15
   else
     s = copy(s0)
   end
+  s0 = copy(s)
   sqb = sqrt(beta0)
   y = 0.0; yp = 1.0
   iter = 0
@@ -42,7 +43,7 @@ if beta0 > 1e-15
   fac1 = k-r0*beta0
   fac2 = r0*dr0dt
 #  while iter == 0 || (abs(ds) > 1e-4*s && iter < 10)
-  while iter == 0 || (abs(ds) > 1e-8*s && iter < 10)
+  while iter == 0 || (abs(ds) > 1e-8 && iter < 10)
 #    xx = 0.5*sqb*s
     xx = sqb*s
 #    println("xx: ",xx," r0: ",r0)
@@ -66,9 +67,9 @@ if beta0 > 1e-15
     s += ds
     iter +=1
   end
-#  if iter > 1
-#    println(iter," ",s," ",s/s0-1," ds: ",ds)
-#  end
+  if iter > 2
+    println(iter," ",s," ",s/s0-1," ds: ",ds)
+  end
 # Compute error (this is useful if value of tol is adjusted):
 #  xx = sqb*s; sx = sin(xx); cx = cos(xx)
 #  yppp = (k-r0*beta0)*cx - sqb*r0*dr0dt*sx
@@ -132,6 +133,7 @@ if beta0 < -1e-15
   else
     s = copy(s0)
   end
+  s0 = copy(s)
   sqb = sqrt(-beta0)
   y = 0.0; yp = 1.0
   iter = 0
@@ -139,7 +141,7 @@ if beta0 < -1e-15
   fac1 = k-r0*beta0
   fac2 = r0*dr0dt
 #  while iter == 0 || (abs(ds) > 1e-4*s && iter < 10)
-  while iter == 0 || (abs(ds) > 1e-8*s && iter < 10)
+  while iter == 0 || (abs(ds) > 1e-8 && iter < 10)
     xx = sqb*s; cx = cosh(xx); sx = sqb*(exp(xx)-cx)
 # Third derivative:
     yppp = fac1*cx + fac2*sx
@@ -156,7 +158,10 @@ if beta0 < -1e-15
 #    println("s0: ",s0," x: ",x," y: ",y," yp: ",yp," ds: ",ds)
     iter +=1
   end
-#    println("iter: ",iter," ds/s: ",ds/s0)
+  if iter > 2
+    #println("iter: ",iter," ds/s: ",ds/s0)
+    println(iter," ",s," ",s/s0-1," ds: ",ds)
+  end
   xx = 0.5*sqb*s; cx = cosh(xx); sx = exp(xx)-cx
 # Now, compute final values:
   g1bs = 2.0*sx*cx/sqb

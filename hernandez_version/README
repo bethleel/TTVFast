@@ -115,7 +115,7 @@ Code seems to be debugged, and agrees (for the most part) with David's. [x]
 
 Next, I need to
 1). Add in extrapolation of s from prior steps; [ ]
-2). Enable finding transit times; [ ]
+2). Enable finding transit times; [x]
 3). Set up initial conditions. [x]
     - This involves coming up with a means of specifying a hierarchical N-body system.
 Then, take derivatives, and optimize fits to T-1!
@@ -133,5 +133,67 @@ Tasks:
 4).  Compute the semi-major axis for each Kepler problem. [x]
 5).  Compute the cartesian elements & velocities for each Keplerian. [x]
 6).  Compute the initial positions & velocities. [x]
-7).  Couple to the integrator. [ ]
-8).  Compute transit times. [ ]
+7).  Couple to the integrator. [x]
+8).  Compute transit times. [x]
+
+9/7/2017
+Problem: consq! isn't modifying L0, p0 or xcm0.
+Solution: switched to fill! rather than zeros(NDIM) in consq!
+
+Now, it seems to be working!  Energy is conserved to ~4x10^-7 for a step size
+of 0.15 days.
+
+Idea:  Make a plot of the barycentric motion of the star with time. [x]
+
+This looks pretty cool!
+
+9/8/2017
+Okay, got a routine working which computes TTVs, and they look qualitatively
+similar to Simon Grimm's code(!).
+
+Next steps:
+1).  Optimize code, and figure out some way to check that it is working correctly.
+2).  Compute transit time derivatives with respect to initial elements
+(either analytically, or with autodiff).
+3).  Optimize the fit to the latest transit times for the paper.
+4).  Figure out how to run a Markov chain.
+
+Checking the convergence with time step, there appear to be (t0,P) offsets
+(possibly because there is no corrector applied for the integrator), but
+for TRAPPIST-1, the TTV appear to be converged to <3 sec precision for
+a time step of 0.05 days (about 1/30 of the period of the inner planet).
+This should be sufficient given the precision of the measurements.
+
+Right now the run time is prohibitively slow!  0.4 seconds... and there doesn't
+appear to be much to optimize - the profile looked fairly clean.  I could possibly
+get another factor of 2 in speed-up if I implement the extrapolation of s, and
+if I can converge in ~1 iteration rather than two. [ ]  Another possibility would
+be to only include adjacent planets' perturbations, which may give another
+factor of ~2.8 speed-up. [ ]  I should also figure out how long the transit-time
+computation is taking:  in practice I'll only need to compute the observed
+transit times, which may save a bit. [ ] Overall, though, rather disappointing:  
+I was hoping to obtain ~msec speed.
+
+I need to see how long the other version(s) of TTVFast are taking, and I should also 
+ask Simon how long his integrator takes. [ ]
+
+Otherwise the only way to get additional speed is to figure out how to improve
+TTVFaster (which seems impossible), or to figure out how to make TTVFast parallel
+(also daunting).  Analytic derivatives may help with optimization, which I should
+look into next, both with autodiff [ ] and with propagating derivative. [ ]
+
+The other possibility is to compute a grid of models, and
+to fit these with a quadratic function of the transit times.  This approach
+seems promising, so I'll look into it next week. [ ]
+
+I also need to look into the coordinate system to make sure I'm transforming
+correctly. [ ]
+
+Another to do: Figure out a corrector/inverse corrector for this map. [ ]
+
+To do:
+1). Compute derivatives.
+2). Optimize model to TRAPPIST-1.
+3). Perturb parameters; see if we can find a quadratic fit to transit times
+as a function of the starting parameters.
+4). With quadratic fit, carry out an MCMC analysis.

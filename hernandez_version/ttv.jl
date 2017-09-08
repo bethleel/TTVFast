@@ -9,9 +9,8 @@ const third = 1./3.
 include("kepler_step.jl")
 include("init_nbody.jl")
 
-function nbody!(t0::Float64,h::Float64,tmax::Float64,elements::Array{Float64,2},t_out::Array{Float64,1},state_out::Array{Float64,2},nstep::Int64)
+function ttv!(n::Int64,t0::Float64,h::Float64,tmax::Float64,elements::Array{Float64,2},tt::Array{Float64,2},count::Array{Int64,1})
 fcons = open("fcons.txt","w");
-n=8
 m=zeros(n)
 x=zeros(NDIM,n)
 v=zeros(NDIM,n)
@@ -19,24 +18,32 @@ L0=zeros(NDIM)
 p0=zeros(NDIM)
 xcm0=zeros(NDIM)
 ssave = zeros(n,n,3)
+# Fill the transit-timing array with zeros:
+fill!(tt,0.0)
+# Counter for transits of each planet:
+fill!(count,0)
 # Read in the initial orbital elements from a file (this
 # should be moved to an input parameter):
-elements = readdlm("elements.txt",',')
+#elements = readdlm("elements.txt",',')
 for i=1:n
   m[i] = elements[i,1]
 end
 # Initialize the N-body problem using nested hierarchy of Keplerians:
 x,v = init_nbody(elements,t0,n)
+xprior = copy(x)
+vprior = copy(v)
 #    infig1!(m,x,v,n)
 # Compute the conserved quantities:
-E0=consq!(m,x,v,n,L0,p0,xcm0)
+#E0=consq!(m,x,v,n,L0,p0,xcm0)
 #println("E0: ",E0," L0: ",L0," p0: ",p0," xcm0: ",xcm0)
 #read(STDIN,Char)
 # Set the time to the initial time:
 t = t0
 # Set step counter to zero:
 i=0
-#nstep = 1
+# Save the g function, which computes the relative sky velocity dotted with relative position
+# between the planets and star:
+gsave = zeros(n)
 # Loop over time steps:
 while t < t0+tmax
   # Increment time by the time step:
@@ -45,25 +52,36 @@ while t < t0+tmax
   i +=1
   # Carry out a phi^2 mapping step:
   phi2!(x,v,h,m,n)
-  # Every nstep steps, output the state of the system:
-  if mod(i,nstep) == 0
-    state_string = @sprintf("%18.12f",t)
-    for j=1:n
-      state_string = string(state_string,@sprintf("%18.12f",x[1,j]),@sprintf("%18.12f",x[3,j]),@sprintf("%18.12f",v[1,j]),@sprintf("%18.12f",v[3,j]))
+  # Check to see if a transit may have occured.  Sky is x-y plane; line of sight is z.
+  # Star is body 1; planets are 2-nbody:
+  for i=2:n
+    # Compute the relative sky velocity dotted with position:
+    gi = g!(i,1,x,v)
+    ri = sqrt(x[1,i]^2+x[2,i]^2+x[3,i]^2)
+    # See if sign switches, and if planet is in front of star (by a good amount):
+    if gi > 0 && gsave[i] < 0 && x[3,i] > 0.25*ri
+      # A transit has occurred between the time steps.
+      # Approximate the planet-star motion as a Keplerian, weighting over timestep:
+      count[i] += 1
+#      println("Transit occured: ",i," g1: ",gsave[i]," g2: ",gi," z: ",x[:,i])
+      tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
     end
-    state_string = state_string*"\n"
-    print(fcons,state_string)
+    gsave[i] = gi
   end
-  # 
+  # Save the current state as prior state:
+  for i=1:NDIM
+    for j=1:n
+      xprior[i,j]=x[i,j]
+      vprior[i,j]=v[i,j]
+    end
+  end
 end
 # Compute the final values of the conserved quantities:
 L=zeros(NDIM)
 p=zeros(NDIM)
 xcm=zeros(NDIM)
-E=consq!(m,x,v,n,L,p,xcm)
-println("dE/E=",(E0-E)/E0)
-# Close the output file:
-close(fcons)
+#E=consq!(m,x,v,n,L,p,xcm)
+#println("dE/E=",(E0-E)/E0)
 return 
 end
 
@@ -232,4 +250,61 @@ println("L: ",L)
 println("p: ",p)
 println("xcm: ",xcm)
 return E
+end
+
+# Used in computing the transit time:
+function g!(i,j,x,v)
+# See equation 8-10 Fabrycky (2008) in Seager Exoplanets book
+g = (x[1,j]-x[1,i])*(v[1,j]-v[1,i])+(x[2,j]-x[2,i])*(v[2,j]-v[2,i])
+return g
+end
+
+function findtransit!(i,h,g1,g2,m,x1,v1,x2,v2)
+# Computes the transit time, approximating the motion
+# as a Keplerian forward & backward in time, weighted by location in the timestep.
+# Initial guess using linear interpolation:
+tt = -g1*h/(g2-g1)
+dt = 1.0
+
+# Setup state vectors for kepler_step:
+s10 = zeros(Float64,12)
+s20 = zeros(Float64,12)
+# Final state (after a step):
+s1 = zeros(Float64,12)
+s2 = zeros(Float64,12)
+s = zeros(Float64,12)
+for k=1:NDIM
+  s10[1+k     ] = x1[k,i] - x1[k,1]
+  s10[1+k+NDIM] = v1[k,i] - v1[k,1]
+  s20[1+k     ] = x2[k,i] - x2[k,1]
+  s20[1+k+NDIM] = v2[k,i] - v2[k,1]
+end
+gm = GNEWT*(m[i]+m[1])
+iter = 0
+while abs(dt) > 1e-8 && iter < 20
+  # Advance planet state at start of step to estimated transit time:
+  kepler_step!(gm,    tt, s10, s1)
+  # Reverse planet state at end of step to estimated transit time:
+  kepler_step!(gm, -h+tt, s20, s2)
+  # Compute linear weighting of states:
+  for j=2:7
+    s[j] = (s1[j]*(h-tt)+s2[j]*tt)/h
+  end
+  # Compute time offset:
+  g = s[2]*s[5]+s[3]*s[6]
+  # Compute gravitational acceleration
+  accel1 = -gm*s1[2:4]/norm(s1[2:4])^3
+  accel2 = -gm*s2[2:4]/norm(s2[2:4])^3
+  accel = (accel1*(h-tt)+accel2*tt)/h
+  # Compute derivative of g with respect to time:
+  gdot = s[5]^2+s[6]^2+s[2]*accel[1]+s[3]*accel[2]
+  # Refine estimate of transit time with Newton's method:
+  dt = -g/gdot
+  # Add refinement to estimated time:
+  tt += dt
+  iter +=1
+end
+#println("Found transit time: ",i," ",tt," iter: ",iter," ",s[2]*s[5]+s[3]*s[6]," ",dt)
+# Note: this is the time *after* the beginning of the timestep:
+return tt
 end
