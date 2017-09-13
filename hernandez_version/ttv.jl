@@ -14,17 +14,11 @@ fcons = open("fcons.txt","w");
 m=zeros(n)
 x=zeros(NDIM,n)
 v=zeros(NDIM,n)
-L0=zeros(NDIM)
-p0=zeros(NDIM)
-xcm0=zeros(NDIM)
 ssave = zeros(n,n,3)
 # Fill the transit-timing array with zeros:
 fill!(tt,0.0)
 # Counter for transits of each planet:
 fill!(count,0)
-# Read in the initial orbital elements from a file (this
-# should be moved to an input parameter):
-#elements = readdlm("elements.txt",',')
 for i=1:n
   m[i] = elements[i,1]
 end
@@ -32,11 +26,6 @@ end
 x,v = init_nbody(elements,t0,n)
 xprior = copy(x)
 vprior = copy(v)
-#    infig1!(m,x,v,n)
-# Compute the conserved quantities:
-#E0=consq!(m,x,v,n,L0,p0,xcm0)
-#println("E0: ",E0," L0: ",L0," p0: ",p0," xcm0: ",xcm0)
-#read(STDIN,Char)
 # Set the time to the initial time:
 t = t0
 # Set step counter to zero:
@@ -63,7 +52,6 @@ while t < t0+tmax
       # A transit has occurred between the time steps.
       # Approximate the planet-star motion as a Keplerian, weighting over timestep:
       count[i] += 1
-#      println("Transit occured: ",i," g1: ",gsave[i]," g2: ",gi," z: ",x[:,i])
       tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
     end
     gsave[i] = gi
@@ -76,12 +64,6 @@ while t < t0+tmax
     end
   end
 end
-# Compute the final values of the conserved quantities:
-L=zeros(NDIM)
-p=zeros(NDIM)
-xcm=zeros(NDIM)
-#E=consq!(m,x,v,n,L,p,xcm)
-#println("dE/E=",(E0-E)/E0)
 return 
 end
 
@@ -176,82 +158,6 @@ drift!(x,v,h/2,n)
 return
 end
 
-
-# Initializes the system for a specific dynamical problem: eccentric binary orbiting
-# a larger body.  Units in ~AU & yr.
-function infig1!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},n::Int64)
-a0 = 0.0125
-a1 = 1.0
-e0 = 0.6
-e1 = 0
-m[1] = 1e-3
-m[2] = 1e-3
-m[3] = 1.0
-mu0 = (m[1]*m[2])/(m[1]+m[2])
-mt0 = m[1]+m[2]
-mu1 = (m[3]*mt0)/(m[3]+mt0)
-mt1 = m[3]+mt0
-x0 = a0*(1+e0)
-x1 = a1*(1+e1)
-v0 = sqrt(GNEWT*mt0/a0*(1-e0)/(1+e0))
-v1 = sqrt(GNEWT*mt1/a1*(1-e1)/(1+e1))
-fa0 = m[1]/mt0
-fb0 = m[2]/mt0
-fa1 = mt0/mt1
-fb1 = m[3]/mt1
-x[1,1] = -fb1*x1-fb0*x0
-x[1,2] = -fb1*x1+fa0*x0
-x[1,3] = fa1*x1
-v[2,1] = -fb1*v1-fb0*v0
-v[2,2] = -fb1*v1+fa0*v0
-v[2,3] = fa1*v1
-return
-end
-
-# Computes conserved quantities:
-function consq!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},n::Int64,
-              L::Array{Float64,1},p::Array{Float64,1},xcm::Array{Float64,1})
-fill!(p,0.0) # =zeros(NDIM)
-fill!(xcm,0.0) # =zeros(NDIM)
-fill!(L,0.0) #  =zeros(NDIM)
-E = 0.0
-for i=1:n
-  if m[i] != 0
-    for j=1:NDIM
-      p[j] += m[i]*v[j,i];
-      xcm[j] += m[i]*x[j,i];
-    end
-    L[1] += m[i]*(x[2,i]*v[3,i]-x[3,i]*v[2,i]);
-    L[2] += m[i]*(x[3,i]*v[1,i]-x[1,i]*v[3,i]);
-    L[3] += m[i]*(x[1,i]*v[2,i]-x[2,i]*v[1,i]);
-  end
-  for j=1:NDIM
-    E += 1.0/2.0*m[i]*v[j,i]*v[j,i];
-  end
-  for j=i+1:n
-    if m[j] != 0
-      rij = 0.;
-      for k=1:NDIM
-        rij += (x[k,i]-x[k,j])*(x[k,i]-x[k,j]);
-      end
-      rij = sqrt(rij);
-      E -= GNEWT*m[i]*m[j]/rij;
-    end
-  end
-end
-mt=sum(m)
-if mt != 0
-  for i=1:NDIM
-    xcm[i] /= mt;
-    p[i] /= mt;
-  end
-end
-println("L: ",L)
-println("p: ",p)
-println("xcm: ",xcm)
-return E
-end
-
 # Used in computing the transit time:
 function g!(i,j,x,v)
 # See equation 8-10 Fabrycky (2008) in Seager Exoplanets book
@@ -304,7 +210,6 @@ while abs(dt) > 1e-8 && iter < 20
   tt += dt
   iter +=1
 end
-#println("Found transit time: ",i," ",tt," iter: ",iter," ",s[2]*s[5]+s[3]*s[6]," ",dt)
-# Note: this is the time *after* the beginning of the timestep:
+# Note: this is the time elapsed *after* the beginning of the timestep:
 return tt
 end

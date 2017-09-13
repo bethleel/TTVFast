@@ -197,3 +197,23 @@ To do:
 3). Perturb parameters; see if we can find a quadratic fit to transit times
 as a function of the starting parameters.
 4). With quadratic fit, carry out an MCMC analysis.
+
+9/11/2017
+
+Not much success with any of the next steps yet.
+
+The initial times of transit seem to change wildly when the initial t_0 values
+change by a small amount.  Perhaps I need to make sure that the t0 values are defined
+early on.
+
+Found a bug: omega was being converted to radians from degrees, while it was starting
+in radians.  This helps to fix the starting t0; now this matches better.  I also
+now define the t0 values close to the start of the integration.
+
+Problem:  How do we carry out a linearization with respect to the initial parameters
+while guaranteeing somehow that the transit times aren't too far off of the correct
+values?  Should we try to expand in harmonics of adjacent planets?
+
+9/12/2017
+
+Next, going to try autodiff on the various functions, and see what it comes up with.

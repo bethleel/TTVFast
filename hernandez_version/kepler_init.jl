@@ -12,7 +12,7 @@ semi = (GNEWT*mass*period^2/4/pi^2)^third
 ecc=sqrt(elements[3]^2+elements[4]^2)
 omega = atan2(elements[4],elements[3])
 # The true anomaly at the time of transit:
-f1 = 1.5*pi-omega*pi/180.0
+f1 = 1.5*pi-omega
 # Compute the time of periastron passage:
 sqrt1mecc2 = sqrt(1.0-ecc^2)
 tp=(elements[2]+period*sqrt1mecc2/2.0/pi*(ecc*sin(f1)/(1.0+ecc*cos(f1))

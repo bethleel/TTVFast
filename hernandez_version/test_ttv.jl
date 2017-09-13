@@ -1,5 +1,5 @@
-#include("ttv.jl")
-#include("/Users/ericagol/Computer/Julia/regress.jl")
+include("ttv.jl")
+include("/Users/ericagol/Computer/Julia/regress.jl")
 
 n = 8
 t0 = 7257.93115525
@@ -50,7 +50,7 @@ for i=2:8
   ttv2 = (tti2-tt_ref2)*24.*60.
   ax[:plot](tti1,ttv1)
 #  ax[:plot](tti2,ttv2)
-  ax[:plot](tti2,((ttv1-ttv2)-mean(ttv1-ttv2))*60.)
-#  println(i," ",coeff," ",elements[i,2:3]," ",coeff[1]-elements[i,3]," ",coeff[2]-elements[i,2])
-  println(i," ",maximum(ttv1-ttv2-mean(ttv1-ttv2))*60.," ", minimum(ttv1-ttv2-mean(ttv1-ttv2))*60.)
+  ax[:plot](tti2,((ttv1-ttv2)-mean(ttv1-ttv2)))
+  println(i," ",coeff," ",elements[i,2:3]," ",coeff[1]-elements[i,3]," ",coeff[2]-elements[i,2])
+  println(i," ",maximum(ttv1-ttv2-mean(ttv1-ttv2))*60.," sec ", minimum(ttv1-ttv2-mean(ttv1-ttv2))*60.," sec" )
 end
