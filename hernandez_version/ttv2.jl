@@ -318,10 +318,10 @@ while (abs(dt1) > 1e-8 || abs(dt2) > 1e-8) && iter < 20
   iter +=1
 end
 # Weight the forwards & backwards transit times:
-w1,dw1 = weight_time(tt1/h)
-w2,dw2 = weight_time(1.0-tt2/h)
-#tt = (tt1*tt2+(h-tt2)*tt1)/(h-tt2+tt1)
-tt = (w1*tt1+t2*tt2)/(w1+w2)
+#w1,dw1 = weight_time(tt1/h)
+#w2,dw2 = weight_time(1.0-tt2/h)
+tt = (tt1*tt2+(h-tt2)*tt1)/(h-tt2+tt1)
+#tt = (w1*tt1+w2*tt2)/(w1+w2)
 # If tt1 ~ 0, then (h-tt2)*tt1/(h-tt2) ~ tt1
 # If tt2 ~ h, then tt1*tt2/tt1 ~ tt2
 # Note: this is the time elapsed *after* the beginning of the timestep:

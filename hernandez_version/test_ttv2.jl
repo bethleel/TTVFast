@@ -3,7 +3,7 @@ include("/Users/ericagol/Computer/Julia/regress.jl")
 
 n = 8
 t0 = 7257.93115525
-h  = 0.1
+h  = 0.12
 tmax = 600.0
 
 # Read in initial conditions:
