@@ -48,9 +48,9 @@ if beta0 > 1e-15
     s += ds
     iter +=1
   end
-  if iter > 2
-    println(iter," ",s," ",s/s0-1," ds: ",ds)
-  end
+#  if iter > 2
+#    println(iter," ",s," ",s/s0-1," ds: ",ds)
+#  end
 # Since we updated s, need to recompute:
   xx = 0.5*sqb*s; sx = sin(xx) ; cx = cos(xx)
 # Now, compute final values:
@@ -119,10 +119,10 @@ if beta0 < -1e-15
     s += ds
     iter +=1
   end
-  if iter > 2
-    #println("iter: ",iter," ds/s: ",ds/s0)
-    println(iter," ",s," ",s/s0-1," ds: ",ds)
-  end
+#  if iter > 2
+#    #println("iter: ",iter," ds/s: ",ds/s0)
+#    println(iter," ",s," ",s/s0-1," ds: ",ds)
+#  end
   xx = 0.5*sqb*s; cx = cosh(xx); sx = exp(xx)-cx
 # Now, compute final values:
   g1bs = 2.0*sx*cx/sqb

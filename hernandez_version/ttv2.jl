@@ -40,7 +40,8 @@ while t < t0+tmax
   # Increment counter by one:
   i +=1
   # Carry out a phi^2 mapping step:
-  phi2!(x,v,h,m,n)
+#  phi2!(x,v,h,m,n)
+  dh17!(x,v,h,m,n)
   # Check to see if a transit may have occured.  Sky is x-y plane; line of sight is z.
   # Star is body 1; planets are 2-nbody:
   for i=2:n
@@ -140,8 +141,54 @@ end
 return
 end
 
-# Carries out the phi^2 mapping
-function phi2!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64)
+function phisalpha!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},alpha::Float64,n::Int64)
+# Computes the 4th-order correction:
+#function [v] = phisalpha(x,v,h,m,alpha)
+#n = size(m,2);
+a = zeros(3,n)
+rij = zeros(3)
+aij = zeros(3)
+for i=1:n
+  for j = i+1:n
+    for k=1:3
+      rij[k] = x[k,i] - x[k,j]
+    end
+#    r2 = sum(rij.^2)
+    r2 = dot(rij,rij)
+#    r3 = r2.^(1.5)
+    r3 = r2*sqrt(r2)
+    for k=1:3
+      fac = GNEWT*rij[k]./r3
+      a[k,i] = a[k,i] - m[j]*fac
+      a[k,j] = a[k,j] + m[i]*fac
+    end
+  end
+end
+for i=1:n
+  for j=i+1:n
+    for k=1:3
+      aij[k] = a[k,i] - a[k,j]
+      rij[k] = x[k,i] - x[k,j]
+    end
+#    r2 = sum(rij.^2)
+    r2 = dot(rij,rij)
+    r1 = sqrt(r2)
+#    ardot = sum(aij.*rij)
+    ardot = dot(aij,rij)
+    for k=1:3
+      fac = alpha*h^3/96*2*GNEWT/r1^5*(rij[k]*(2*GNEWT*(m[i]+m[j])/r1 + 3*ardot) - r2*aij[k])
+      v[k,i] = v[k,i] + m[j]*fac
+      v[k,j] = v[k,j] - m[i]*fac
+    end
+  end
+end
+return
+end
+
+# Carries out the DH17 mapping
+function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64)
+alpha = 0.25
+phisalpha!(x,v,h,m,alpha,n)
 drift!(x,v,h/2,n)
 for i=1:n-1
   for j=i+1:n
@@ -149,6 +196,7 @@ for i=1:n-1
     keplerij!(m,x,v,i,j,h/2)
   end
 end
+phisalpha!(x,v,h,m,2.*(1.-alpha),n)
 for i=n-1:-1:1
   for j=n:-1:i+1
     keplerij!(m,x,v,i,j,h/2)
@@ -156,6 +204,7 @@ for i=n-1:-1:1
   end
 end
 drift!(x,v,h/2,n)
+phisalpha!(x,v,h,m,alpha,n)
 return
 end
 

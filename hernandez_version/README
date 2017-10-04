@@ -220,3 +220,41 @@ Next, going to try autodiff on the various functions, and see what it comes up w
 
 9/20/2017
 I'm making progress on differentiable function...
+
+9/21/2017
+
+Okay, I got the derivatives working for the Kepler stepper!
+
+The numerically computed jacobian agrees to ~10^-6 with analytically computed!
+
+Just run:
+
+include("test_elliptical_derivative.jl")
+
+So, remaining steps are to test the hyperbolic case,
+do center-of-mass conversion, differentiate drifts,
+implement higher order integrator, differentiate initial conditions,
+and differentiate transit time finding.  Then, write routines to put all of this together
+and write a Hamiltonian markov chain monte carlo code.
+
+9/27/2017
+I'm having trouble getting the derivatives to work out...
+Need to revisit with fresh mind.
+
+Seems to be working for the planet in x-z plane!
+But, still not working for the star, nor for the y-axis (although this may
+be due to the fact that system is edge-on).
+
+There seems to be a sign error in the mass derivative.
+
+9/28/2017
+Okay, I debugged the two-body Kepler derivative!  There were a few problems: 1). my
+derivation used the opposite sign of David's; 2). I was adding in the x-vector to
+every component of the derivative matrix, while it should have been diagonal.
+
+I ended up tilting the system to give better estimates of derivatives, and it seems
+to be working great!
+
+10/4/2017
+I wrote a version which used Kat's interpolation scheme rather than mine;  this
+is somewhat better defined since the states are real.

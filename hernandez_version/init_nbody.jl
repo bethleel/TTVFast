@@ -26,8 +26,8 @@ n_level = n_body-1
 # Input -
 # elements: masses & orbital elements for each Keplerian (in this case, each planet plus star)
 # Output -
-# x: n_body x NDIM array of positions  of each planet.
-# v: n_body x NDIM array of velocities "   "      "
+# x: NDIM x n_body array of positions  of each planet.
+# v: NDIM x n_body array of velocities "   "      "
 #
 # Read in the orbital elements:
 # elements = readdlm("elements.txt",',')

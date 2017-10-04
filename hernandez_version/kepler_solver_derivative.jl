@@ -48,9 +48,9 @@ if beta0 > 1e-15
     s += ds
     iter +=1
   end
-  if iter > 2
-    println(iter," ",s," ",s/s0-1," ds: ",ds)
-  end
+#  if iter > 2
+#    println(iter," ",s," ",s/s0-1," ds: ",ds)
+#  end
 # Since we updated s, need to recompute:
   xx = 0.5*sqb*s; sx = sin(xx) ; cx = cos(xx)
 # Now, compute final values:
@@ -122,9 +122,9 @@ if beta0 > 1e-15
     s += ds
     iter +=1
   end
-  if iter > 2
-    println(iter," ",s," ",s/s0-1," ds: ",ds)
-  end
+#  if iter > 2
+#    println(iter," ",s," ",s/s0-1," ds: ",ds)
+#  end
 # Since we updated s, need to recompute:
   xx = 0.5*sqb*s; sx = sin(xx) ; cx = cos(xx)
 # Now, compute final values:
@@ -199,10 +199,10 @@ if beta0 < -1e-15
     s += ds
     iter +=1
   end
-  if iter > 2
-    #println("iter: ",iter," ds/s: ",ds/s0)
-    println(iter," ",s," ",s/s0-1," ds: ",ds)
-  end
+#  if iter > 2
+#    #println("iter: ",iter," ds/s: ",ds/s0)
+#    println(iter," ",s," ",s/s0-1," ds: ",ds)
+#  end
   xx = 0.5*sqb*s; cx = cosh(xx); sx = exp(xx)-cx
 # Now, compute final values:
   g1bs = 2.0*sx*cx/sqb
@@ -270,10 +270,10 @@ if beta0 < -1e-15
     s += ds
     iter +=1
   end
-  if iter > 2
-    #println("iter: ",iter," ds/s: ",ds/s0)
-    println(iter," ",s," ",s/s0-1," ds: ",ds)
-  end
+#  if iter > 2
+#    #println("iter: ",iter," ds/s: ",ds/s0)
+#    println(iter," ",s," ",s/s0-1," ds: ",ds)
+#  end
   xx = 0.5*sqb*s; cx = cosh(xx); sx = exp(xx)-cx
 # Now, compute final values:
   g1bs = 2.0*sx*cx/sqb
@@ -314,32 +314,52 @@ function compute_jacobian!(h,k,x0,v0,beta0,s,f,g,dfdt,dgdt,cx,sx,g1,g2,r0,dr0dt,
 # Compute the Jacobian.  jacobian[i,j] is derivative of final state variable q[i]
 # with respect to initial state variable q0[j], where q = {x,v,k} & q0 = {x0,v0,k}.
 # Now, compute the Jacobian: (9/18/2017 notes)
-g0 = cx^2-sx^2
+#g0 = cx^2-sx^2
+g0 = 1.0-beta0*g2
 g3 = (s-g1)/beta0
-dsdbeta = 0.5*(2h-r0*g1-r0*s*g0-r0*dr0dt*s*g1-k*(g1-s*g0)/beta0)/(beta0*r)
-dsdr0 = -(2k/r0^2*dsdbeta+g1/r+g2*dr0dt/r)
-dsdv0 = -(2dr0dt*dsdbeta+g2*r0/r)
+dotalpha0 = r0*dr0dt  # unnecessary to divide by r0 for dr0dt & multiply for \dot\alpha_0
+absv0 = sqrt(dot(v0,v0))
+dsdbeta = (2h-r0*(s*g0+g1)+k/beta0*(s*g0-g1)-dotalpha0*s*g1)/(2beta0*r)
+dsdr0 = -(2k/r0^2*dsdbeta+g1/r)
+dsda0 = -g2/r
+dsdv0 = -2absv0*dsdbeta
 dsdk = 2/r0*dsdbeta-g3/r
 dbetadr0 = -2k/r0^2
-dbetadv0 = -2dr0dt
+dbetadv0 = -2absv0
 dbetadk  = 2/r0
 # "p" for partial derivative:
-pxpr0 = k/r0^2*g2*x0+(g1+dr0dt*g2)*v0
-pxpv0 = r0*g2*v0
-pxpk  = -g2/r0*v0
-pxps  = -k/r0*g1*x0+(r0*g0+r0*dr0dt*g1)*v0
-pxpbeta = k/(2beta0*r0)*(s*g1-2g2)*x0+r0/(2beta0)*(s*g0-g1+s*dr0dt*g1-2*dr0dt*g2)*v0
-pvpr0 = k*g1/(r*r0^2)*x0+(g0+dr0dt*g1)*v0
-pvpv0 = r0/r*g1*v0
-pvpk = -g1/(r*r0)*x0
-pvps = -k*g0/(r*r0)*x0+r0/r*(-beta0*g1+dr0dt*g0)*v0
-pvpbeta = -k/(2beta0*r*r0)*(s*g0-g1)*x0+r0/(2beta0*r)*(-s*beta0*g1+dr0dt*s*g0-dr0dt*g1)*v0
-dxdr0 = pxps*dsdr0 + pxpbeta*dbetadr0+pxpr0
-dxdv0 = pxps*dsdv0 + pxpbeta*dbetadv0+pxpv0
-dxdk  = pxps*dsdk  + pxpbeta*dbetadk +pxpk
-dvdr0 = pvps*dsdr0 + pvpbeta*dbetadr0+pvpr0
-dvdv0 = pvps*dsdv0 + pvpbeta*dbetadv0+pvpv0
-dvdk  = pvps*dsdk  + pvpbeta*dbetadk +pvpk
+pxpr0 = k/r0^2*g2*x0+g1*v0
+pxpa0 = g2*v0
+pxpk  = -g2/r0*x0
+pxps  = -k/r0*g1*x0+(r0*g0+dotalpha0*g1)*v0
+pxpbeta = -k/(2beta0*r0)*(s*g1-2g2)*x0+1/(2beta0)*(s*r0*g0-r0*g1+s*dotalpha0*g1-2*dotalpha0*g2)*v0
+prvpr0 = k*g1/r0^2*x0+g0*v0
+prvpa0 = g1*v0
+prvpk = -g1/r0*x0
+prvps = -k*g0/r0*x0+(-beta0*r0*g1+dotalpha0*g0)*v0
+prvpbeta = -k/(2beta0*r0)*(s*g0-g1)*x0+1/(2beta0)*(-s*r0*beta0*g1+dotalpha0*s*g0-dotalpha0*g1)*v0
+prpr0 = g0
+prpa0 = g1
+prpk  = g2
+prps = (k-beta0*r0)*g1+dotalpha0*g0
+prpbeta = 1/(2beta0)*(s*(k-beta0*r0)*g1+dotalpha0*s*g0-dotalpha0*g1-2k*g2)
+dxdr0 = pxps*dsdr0 + pxpbeta*dbetadr0 + pxpr0
+dxda0 = pxps*dsda0 + pxpa0
+dxdv0 = pxps*dsdv0 + pxpbeta*dbetadv0
+dxdk  = pxps*dsdk  + pxpbeta*dbetadk + pxpk
+drvdr0 = prvps*dsdr0 + prvpbeta*dbetadr0 + prvpr0
+drvda0 = prvps*dsda0 + prvpa0
+drvdv0 = prvps*dsdv0 + prvpbeta*dbetadv0
+drvdk  = prvps*dsdk  + prvpbeta*dbetadk +prvpk
+drdr0 = prpr0 + prps*dsdr0 + prpbeta*dbetadr0
+drda0 = prpa0 + prps*dsda0
+drdv0 = prps*dsdv0 + prpbeta*dbetadv0
+drdk  = prpk + prps*dsdk + prpbeta*dbetadk
+v = dfdt*x0+dgdt*v0
+dvdr0 = (drvdr0-drdr0*v)/r
+dvda0 = (drvda0-drda0*v)/r
+dvdv0 = (drvdv0-drdv0*v)/r
+dvdk  = (drvdk -drdk *v)/r
 # Now, compute Jacobian:
 for i=1:3
   jacobian[  i,  i] = f
@@ -350,13 +370,13 @@ for i=1:3
   jacobian[3+i,7] = dvdk[i]
   for j=1:3
     jacobian[  i,  j] += dxdr0[i]*x0[j]/r0
-    if dr0dt != 0.0 
-      jacobian[  i,3+j] += dxdv0[i]*v0[j]/dr0dt
-    end
+    jacobian[  i,  j] += dxda0[i]*v0[j]
+    jacobian[  i,3+j] += dxdv0[i]*v0[j]/absv0
+    jacobian[  i,3+j] += dxda0[i]*x0[j]
     jacobian[3+i,  j] += dvdr0[i]*x0[j]/r0
-    if dr0dt != 0.0
-      jacobian[3+i,3+j] += dvdr0[i]*v0[j]/dr0dt
-    end
+    jacobian[3+i,  j] += dvda0[i]*v0[j]
+    jacobian[3+i,3+j] += dvdv0[i]*v0[j]/absv0
+    jacobian[3+i,3+j] += dvda0[i]*x0[j]
   end
   jacobian[7,7]=1.0
 end

@@ -73,9 +73,9 @@ vcm=zeros(NDIM)
 mij =m[i] + m[j]
 if mij == 0 
   for k=1:NDIM
-    vcm[k] = (v[k,i]+v[k,j])/h
+    vcm[k] = (v[k,i]+v[k,j])/2
     x[k,i] += h*vcm[k]
-    v[k,j] += h*vcm[k]
+    x[k,j] += h*vcm[k]
   end
 else
   for k=1:NDIM

@@ -53,7 +53,6 @@ while t < t0+tmax
       # Approximate the planet-star motion as a Keplerian, weighting over timestep:
       count[i] += 1
       tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
-#      tt[i,count[i]]=t+findtransit2!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
     end
     gsave[i] = gi
   end
@@ -69,23 +68,12 @@ return
 end
 
 # Advances the center of mass of a binary
-function centerm!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},delx::Array{Float64,1},delv::Array{Float64,1},i::Int64,j::Int64,h::Float64)
-vcm=zeros(NDIM)
-mij =m[i] + m[j]
-if mij == 0 
-  for k=1:NDIM
-    vcm[k] = (v[k,i]+v[k,j])/2
-    x[k,i] += h*vcm[k]
-    x[k,j] += h*vcm[k]
-  end
-else
-  for k=1:NDIM
-    vcm[k] = (m[i]*v[k,i] + m[j]*v[k,j])/mij
-    x[k,i] +=  m[j]/mij*delx[k] + h*vcm[k]
-    x[k,j] += -m[i]/mij*delx[k] + h*vcm[k]
-    v[k,i] +=  m[j]/mij*delv[k]
-    v[k,j] += -m[i]/mij*delv[k]
-  end
+function centerm!(m::Array{Float64,1},mijinv::Float64,x::Array{Float64,2},v::Array{Float64,2},vcm::Array{Float64,1},delx::Array{Float64,1},delv::Array{Float64,1},i::Int64,j::Int64,h::Float64)
+for k=1:NDIM
+  x[k,i] +=  m[j]*mijinv*delx[k] + h*vcm[k]
+  x[k,j] += -m[i]*mijinv*delx[k] + h*vcm[k]
+  v[k,i] +=  m[j]*mijinv*delv[k]
+  v[k,j] += -m[i]*mijinv*delv[k]
 end
 return
 end
@@ -96,6 +84,98 @@ for k=1:NDIM
   x[k,i] += h*v[k,i]
   x[k,j] += h*v[k,j]
 end
+return
+end
+
+# Carries out a Kepler step for bodies i & j
+function keplerij!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64,jac_ij::Array{Float64,2})
+# The state vector has: 1 time; 2-4 position; 5-7 velocity; 8 r0; 9 dr0dt; 10 beta; 11 s; 12 ds
+# Initial state:
+s0 = zeros(Float64,12)
+# Final state (after a step):
+s = zeros(Float64,12)
+delx = zeros(NDIM)
+delv = zeros(NDIM)
+# jac_ij should be the Jacobian for going from (x_{0,i},v_{0,i},m_i) &  (x_{0,j},v_{0,j},m_j)
+# to  (x_i,v_i,m_i) &  (x_j,v_j,m_j), a 14x14 matrix for the 3-dimensional case. 
+# Fill with zeros for now:
+fill!(jac_ij,0.0)
+for k=1:NDIM
+  s0[1+k     ] = x[k,i] - x[k,j]
+  s0[1+k+NDIM] = v[k,i] - v[k,j]
+end
+gm = GNEWT*(m[i]+m[j])
+# The following jacobian is just computed for the Keplerian coordinates (i.e. doesn't include
+# center-of-mass motion, or scale to motion of bodies about their common center of mass):
+jac_kepler = zeros(7,7)
+kepler_step!(gm, h, s0, s, jac_kepler)
+for k=1:NDIM
+  delx[k] = s[1+k] - s0[1+k]
+  delv[k] = s[1+NDIM+k] - s0[1+NDIM+k]
+end
+# Compute COM coords:
+mijinv =1.0/(m[i] + m[j])
+xcm = zeros(NDIM)
+vcm = zeros(NDIM)
+mi = m[i]*mijinv # Normalize the masses
+mj = m[j]*mijinv
+for k=1:NDIM
+  xcm[k] = mi*x[k,i] + mj*x[k,j]
+  vcm[k] = mi*v[k,i] + mj*v[k,j]
+end
+# Compute the Jacobian:
+jac_ij[ 7, 7] = 1.0  # the masses don't change with time!
+jac_ij[14,14] = 1.0
+for k=1:NDIM
+   jac_ij[   k,   k] +=   mi
+   jac_ij[   k, 3+k] += h*mi
+   jac_ij[   k, 7+k] +=   mj
+   jac_ij[   k,10+k] += h*mj
+   jac_ij[ 3+k, 3+k] +=   mi
+   jac_ij[ 3+k,10+k] +=   mj
+   jac_ij[ 7+k,   k] +=   mi
+   jac_ij[ 7+k, 3+k] += h*mi
+   jac_ij[ 7+k, 7+k] +=   mj
+   jac_ij[ 7+k,10+k] += h*mj
+   jac_ij[10+k, 3+k] +=   mi
+   jac_ij[10+k,10+k] +=   mj
+   for l=1:NDIM
+# Compute derivatives of \delta x_i with respect to initial conditions:
+     jac_ij[   k,   l] += mj*jac_kepler[  k,  l]
+     jac_ij[   k, 3+l] += mj*jac_kepler[  k,3+l]
+     jac_ij[   k, 7+l] -= mj*jac_kepler[  k,  l]
+     jac_ij[   k,10+l] -= mj*jac_kepler[  k,3+l]
+# Compute derivatives of \delta v_i with respect to initial conditions:
+     jac_ij[ 3+k,   l] += mj*jac_kepler[3+k,  l]
+     jac_ij[ 3+k, 3+l] += mj*jac_kepler[3+k,3+l]
+     jac_ij[ 3+k, 7+l] -= mj*jac_kepler[3+k,  l]
+     jac_ij[ 3+k,10+l] -= mj*jac_kepler[3+k,3+l]
+# Compute derivatives of \delta x_j with respect to initial conditions:
+     jac_ij[ 7+k,   l] -= mi*jac_kepler[  k,  l]
+     jac_ij[ 7+k, 3+l] -= mi*jac_kepler[  k,3+l]
+     jac_ij[ 7+k, 7+l] += mi*jac_kepler[  k,  l]
+     jac_ij[ 7+k,10+l] += mi*jac_kepler[  k,3+l]
+# Compute derivatives of \delta v_j with respect to initial conditions:
+     jac_ij[10+k,   l] -= mi*jac_kepler[3+k,  l]
+     jac_ij[10+k, 3+l] -= mi*jac_kepler[3+k,3+l]
+     jac_ij[10+k, 7+l] += mi*jac_kepler[3+k,  l]
+     jac_ij[10+k,10+l] += mi*jac_kepler[3+k,3+l]
+   end
+# Compute derivatives of \delta x_i with respect to the masses:
+   jac_ij[   k, 7] += (x[k,i]+h*v[k,i]-xcm[k]-mj*s[1+k])*mijinv + GNEWT*mj*jac_kepler[  k,7]
+   jac_ij[   k,14] += (x[k,j]+h*v[k,j]-xcm[k]+mi*s[1+k])*mijinv + GNEWT*mj*jac_kepler[  k,7]
+# Compute derivatives of \delta v_i with respect to the masses:
+   jac_ij[ 3+k, 7] += (v[k,i]-vcm[k]-mj*s[4+k])*mijinv + GNEWT*mj*jac_kepler[3+k,7]
+   jac_ij[ 3+k,14] += (v[k,j]-vcm[k]+mi*s[4+k])*mijinv + GNEWT*mj*jac_kepler[3+k,7]
+# Compute derivatives of \delta x_j with respect to the masses:
+   jac_ij[ 7+k, 7] += (x[k,i]+h*v[k,i]-xcm[k]-mj*s[1+k])*mijinv - GNEWT*mi*jac_kepler[  k,7]
+   jac_ij[ 7+k,14] += (x[k,j]+h*v[k,j]-xcm[k]+mi*s[1+k])*mijinv - GNEWT*mi*jac_kepler[  k,7]
+# Compute derivatives of \delta v_j with respect to the masses:
+   jac_ij[10+k, 7] += (v[k,i]-vcm[k]-mj*s[4+k])*mijinv - GNEWT*mi*jac_kepler[3+k,7]
+   jac_ij[10+k,14] += (v[k,j]-vcm[k]+mi*s[4+k])*mijinv - GNEWT*mi*jac_kepler[3+k,7]
+end
+# Advance center of mass & individual Keplerian motions:
+centerm!(m,mijinv,x,v,vcm,delx,delv,i,j,h)
 return
 end
 
@@ -113,20 +193,19 @@ for k=1:NDIM
   s0[1+k+NDIM] = v[k,i] - v[k,j]
 end
 gm = GNEWT*(m[i]+m[j])
-if gm == 0
-  for k=1:NDIM
-    x[k,i] += h*v[k,i]
-    x[k,j] += h*v[k,j]
-  end
-else
-  kepler_step!(gm, h, s0, s)
-  for k=1:NDIM
-    delx[k] = s[1+k] - s0[1+k]
-    delv[k] = s[1+NDIM+k] - s0[1+NDIM+k]
-  end
-# Advance center of mass:
-  centerm!(m,x,v,delx,delv,i,j,h)
+kepler_step!(gm, h, s0, s)
+for k=1:NDIM
+  delx[k] = s[1+k] - s0[1+k]
+  delv[k] = s[1+NDIM+k] - s0[1+NDIM+k]
 end
+# Advance center of mass:
+# Compute COM coords:
+mijinv =1.0/(m[i] + m[j])
+vcm = zeros(NDIM)
+for k=1:NDIM
+  vcm[k] = (m[i]*v[k,i] + m[j]*v[k,j])*mijinv
+end
+centerm!(m,mijinv,x,v,vcm,delx,delv,i,j,h)
 return
 end
 
@@ -213,78 +292,4 @@ while abs(dt) > 1e-8 && iter < 20
 end
 # Note: this is the time elapsed *after* the beginning of the timestep:
 return tt
-end
-
-function findtransit2!(i,h,g1,g2,m,x1,v1,x2,v2)
-# Computes the transit time, approximating the motion
-# as a Keplerian forward & backward in time, weighted by location in the timestep.
-# Initial guess using linear interpolation:
-tt = -g1*h/(g2-g1)
-dt1 = 1.0
-dt2 = 1.0
-
-# Setup state vectors for kepler_step:
-s10 = zeros(Float64,12)
-s20 = zeros(Float64,12)
-# Final state (after a step):
-s1 = zeros(Float64,12)
-s2 = zeros(Float64,12)
-s = zeros(Float64,12)
-for k=1:NDIM
-  s10[1+k     ] = x1[k,i] - x1[k,1]
-  s10[1+k+NDIM] = v1[k,i] - v1[k,1]
-  s20[1+k     ] = x2[k,i] - x2[k,1]
-  s20[1+k+NDIM] = v2[k,i] - v2[k,1]
-end
-gm = GNEWT*(m[i]+m[1])
-iter = 0
-# estimate transit time going forward:
-tt1 = tt
-# estimate transit time going backwards:
-tt2 = tt
-while (abs(dt1) > 1e-8 || abs(dt2) > 1e-8) && iter < 20
-  # Advance planet state at start of step to estimated transit time:
-  kepler_step!(gm,    tt1, s10, s1)
-  # Reverse planet state at end of step to estimated transit time:
-  kepler_step!(gm, -h+tt2, s20, s2)
-  # Compute linear weighting of states:
-#  for j=2:7
-#    s[j] = (s1[j]*(h-tt)+s2[j]*tt)/h
-#  end
-  # Compute time offset:
-  g1 = s1[2]*s1[5]+s1[3]*s1[6]
-  g2 = s2[2]*s2[5]+s2[3]*s2[6]
-  # Compute gravitational acceleration
-  accel1 = -gm*s1[2:4]/norm(s1[2:4])^3
-  accel2 = -gm*s2[2:4]/norm(s2[2:4])^3
-#  accel = (accel1*(h-tt)+accel2*tt)/h
-  # Compute derivative of g with respect to time:
-  gdot1 = s1[5]^2+s1[6]^2+s1[2]*accel1[1]+s1[3]*accel1[2]
-  gdot2 = s2[5]^2+s2[6]^2+s2[2]*accel2[1]+s2[3]*accel2[2]
-  # Refine estimate of transit time with Newton's method:
-  dt1 = -g1/gdot1
-  # Add refinement to estimated time:
-  tt1 += dt1
-  tt2 += dt1
-  iter +=1
-end
-# Weight the forwards & backwards transit times:
-w1,dw1 = weight_time(tt1/h)
-w2,dw2 = weight_time(1.0-tt2/h)
-#tt = (tt1*tt2+(h-tt2)*tt1)/(h-tt2+tt1)
-tt = (w1*tt1+t2*tt2)/(w1+w2)
-# If tt1 ~ 0, then (h-tt2)*tt1/(h-tt2) ~ tt1
-# If tt2 ~ h, then tt1*tt2/tt1 ~ tt2
-# Note: this is the time elapsed *after* the beginning of the timestep:
-return tt
-end
-
-function weight_time(x)
-@assert(x >= 0.0)
-@assert(x <= 1.0)
-if x < 0.5
-  return 1.0-2.*x^2,-4.*x
-else
-  return 2.*(1.0-x)^2,-4.*(1.0-x)
-end
 end
