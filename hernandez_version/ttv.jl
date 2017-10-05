@@ -40,7 +40,8 @@ while t < t0+tmax
   # Increment counter by one:
   i +=1
   # Carry out a phi^2 mapping step:
-  phi2!(x,v,h,m,n)
+#  phi2!(x,v,h,m,n)
+  dh17!(x,v,h,m,n)
   # Check to see if a transit may have occured.  Sky is x-y plane; line of sight is z.
   # Star is body 1; planets are 2-nbody:
   for i=2:n
@@ -140,8 +141,54 @@ end
 return
 end
 
-# Carries out the phi^2 mapping
-function phi2!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64)
+function phisalpha!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},alpha::Float64,n::Int64)
+# Computes the 4th-order correction:
+#function [v] = phisalpha(x,v,h,m,alpha)
+#n = size(m,2);
+a = zeros(3,n)
+rij = zeros(3)
+aij = zeros(3)
+for i=1:n
+  for j = i+1:n
+    for k=1:3
+      rij[k] = x[k,i] - x[k,j]
+    end
+#    r2 = sum(rij.^2)
+    r2 = dot(rij,rij)
+#    r3 = r2.^(1.5)
+    r3 = r2*sqrt(r2)
+    for k=1:3
+      fac = GNEWT*rij[k]./r3
+      a[k,i] = a[k,i] - m[j]*fac
+      a[k,j] = a[k,j] + m[i]*fac
+    end
+  end
+end
+for i=1:n
+  for j=i+1:n
+    for k=1:3
+      aij[k] = a[k,i] - a[k,j]
+      rij[k] = x[k,i] - x[k,j]
+    end
+#    r2 = sum(rij.^2)
+    r2 = dot(rij,rij)
+    r1 = sqrt(r2)
+#    ardot = sum(aij.*rij)
+    ardot = dot(aij,rij)
+    for k=1:3
+      fac = alpha*h^3/96*2*GNEWT/r1^5*(rij[k]*(2*GNEWT*(m[i]+m[j])/r1 + 3*ardot) - r2*aij[k])
+      v[k,i] = v[k,i] + m[j]*fac
+      v[k,j] = v[k,j] - m[i]*fac
+    end
+  end
+end
+return
+end
+
+# Carries out the DH17 mapping
+function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64)
+alpha = 0.25
+phisalpha!(x,v,h,m,alpha,n)
 drift!(x,v,h/2,n)
 for i=1:n-1
   for j=i+1:n
@@ -149,6 +196,7 @@ for i=1:n-1
     keplerij!(m,x,v,i,j,h/2)
   end
 end
+phisalpha!(x,v,h,m,2.*(1.-alpha),n)
 for i=n-1:-1:1
   for j=n:-1:i+1
     keplerij!(m,x,v,i,j,h/2)
@@ -156,6 +204,7 @@ for i=n-1:-1:1
   end
 end
 drift!(x,v,h/2,n)
+phisalpha!(x,v,h,m,alpha,n)
 return
 end
 
@@ -193,18 +242,32 @@ while abs(dt) > 1e-8 && iter < 20
   kepler_step!(gm,    tt, s10, s1)
   # Reverse planet state at end of step to estimated transit time:
   kepler_step!(gm, -h+tt, s20, s2)
-  # Compute linear weighting of states:
+  # Compute weighting of states:
+#  w1,dw1 = weight_time(tt/h)
   for j=2:7
     s[j] = (s1[j]*(h-tt)+s2[j]*tt)/h
+    #s[j] = s1[j]*w1+s2[j]*(1.0-w1)
   end
+  # Add in derivative of interpolating constant:
+#  for j=5:7
+#    s[j] += (-s1[j-3]+s2[j-3])/h
+#  end
   # Compute time offset:
   g = s[2]*s[5]+s[3]*s[6]
   # Compute gravitational acceleration
   accel1 = -gm*s1[2:4]/norm(s1[2:4])^3
   accel2 = -gm*s2[2:4]/norm(s2[2:4])^3
   accel = (accel1*(h-tt)+accel2*tt)/h
+#  # Add in derivative terms
+#  for j=1:3
+#    accel[j] += (-s1[4+j]+s2[4+j])/h
+#  end
+#  accel = accel1*w1+accel2*(1.0-dw1)
   # Compute derivative of g with respect to time:
   gdot = s[5]^2+s[6]^2+s[2]*accel[1]+s[3]*accel[2]
+  # Include time derivatives of interpolation (10/4/17 notes):
+  gdot += ((s2[2]-s1[2])*s[5] + (s2[5]-s1[5])*s[2] +(s2[3]-s1[3])*s[6]+(s2[6]-s1[6])*s[3])/h
+#  gdot += ((-dw1*s2[2]+dw1*s1[2])*s[5] + (-dw1*s2[5]+dw1*s1[5])*s[2] +(-dw1*s2[3]+dw1*s1[3])*s[6]+(-dw1*s2[6]+dw1*s1[6])*s[3])/h
   # Refine estimate of transit time with Newton's method:
   dt = -g/gdot
   # Add refinement to estimated time:
@@ -269,10 +332,10 @@ while (abs(dt1) > 1e-8 || abs(dt2) > 1e-8) && iter < 20
   iter +=1
 end
 # Weight the forwards & backwards transit times:
-w1,dw1 = weight_time(tt1/h)
-w2,dw2 = weight_time(1.0-tt2/h)
-#tt = (tt1*tt2+(h-tt2)*tt1)/(h-tt2+tt1)
-tt = (w1*tt1+t2*tt2)/(w1+w2)
+#w1,dw1 = weight_time(tt1/h)
+#w2,dw2 = weight_time(1.0-tt2/h)
+tt = (tt1*tt2+(h-tt2)*tt1)/(h-tt2+tt1)
+#tt = (w1*tt1+w2*tt2)/(w1+w2)
 # If tt1 ~ 0, then (h-tt2)*tt1/(h-tt2) ~ tt1
 # If tt2 ~ h, then tt1*tt2/tt1 ~ tt2
 # Note: this is the time elapsed *after* the beginning of the timestep:
@@ -280,8 +343,11 @@ return tt
 end
 
 function weight_time(x)
-@assert(x >= 0.0)
-@assert(x <= 1.0)
+#@assert(x >= 0.0)
+#@assert(x <= 1.0)
+#if (x <0 || x > 1.0)
+#  println("x: ",x)
+#end
 if x < 0.5
   return 1.0-2.*x^2,-4.*x
 else
