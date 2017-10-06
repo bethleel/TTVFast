@@ -100,7 +100,7 @@ Onward to carrying out symplectic integrator:
 1). See whether I can reproduce Hernandez' code in Julia, and try out the
 eccentric binary planet problem. [x]
 2). Does cubic initial estimate speed things up, or slow it down? [ ]
-3). Then, figure out TTVs and benchmark. [ ]
+3). Then, figure out TTVs and benchmark. [x]
 
 Then, try it out for a planet-moon system orbiting a binary star! [ ]
 
@@ -114,7 +114,7 @@ Okay, I got the Julia translation done.  Now for debugging next!
 Code seems to be debugged, and agrees (for the most part) with David's. [x]
 
 Next, I need to
-1). Add in extrapolation of s from prior steps; [ ]
+1). Add in extrapolation of s from prior steps; [x] (Doesn't speed it up at all!)
 2). Enable finding transit times; [x]
 3). Set up initial conditions. [x]
     - This involves coming up with a means of specifying a hierarchical N-body system.
@@ -152,11 +152,11 @@ Okay, got a routine working which computes TTVs, and they look qualitatively
 similar to Simon Grimm's code(!).
 
 Next steps:
-1).  Optimize code, and figure out some way to check that it is working correctly.
+1).  Optimize code, and figure out some way to check that it is working correctly. [x]
 2).  Compute transit time derivatives with respect to initial elements
-(either analytically, or with autodiff).
-3).  Optimize the fit to the latest transit times for the paper.
-4).  Figure out how to run a Markov chain.
+(either analytically, or with autodiff). [ ]
+3).  Optimize the fit to the latest transit times for the paper. [x]
+4).  Figure out how to run a Markov chain. [ ]
 
 Checking the convergence with time step, there appear to be (t0,P) offsets
 (possibly because there is no corrector applied for the integrator), but
@@ -171,11 +171,11 @@ if I can converge in ~1 iteration rather than two. [ ]  Another possibility woul
 be to only include adjacent planets' perturbations, which may give another
 factor of ~2.8 speed-up. [ ]  I should also figure out how long the transit-time
 computation is taking:  in practice I'll only need to compute the observed
-transit times, which may save a bit. [ ] Overall, though, rather disappointing:  
+transit times, which may save a bit. [ ] Overall, though, rather disappointing:
 I was hoping to obtain ~msec speed.
 
 I need to see how long the other version(s) of TTVFast are taking, and I should also 
-ask Simon how long his integrator takes. [ ]
+ask Simon how long his integrator takes. [x]
 
 Otherwise the only way to get additional speed is to figure out how to improve
 TTVFaster (which seems impossible), or to figure out how to make TTVFast parallel
@@ -184,19 +184,20 @@ look into next, both with autodiff [ ] and with propagating derivative. [ ]
 
 The other possibility is to compute a grid of models, and
 to fit these with a quadratic function of the transit times.  This approach
-seems promising, so I'll look into it next week. [ ]
+seems promising, so I'll look into it next week. [x] Nope, didn't work.
 
 I also need to look into the coordinate system to make sure I'm transforming
 correctly. [ ]
 
-Another to do: Figure out a corrector/inverse corrector for this map. [ ]
+Another to do: Figure out a corrector/inverse corrector for this map. [x] Too hard.
+But, David shared code for 4th order integrator.
 
 To do:
-1). Compute derivatives.
-2). Optimize model to TRAPPIST-1.
+1). Compute derivatives. [x] Numerically [ ] Analytically.
+2). Optimize model to TRAPPIST-1. [x]
 3). Perturb parameters; see if we can find a quadratic fit to transit times
-as a function of the starting parameters.
-4). With quadratic fit, carry out an MCMC analysis.
+as a function of the starting parameters. [x]
+4). With quadratic fit, carry out an MCMC analysis. [x]
 
 9/11/2017
 
@@ -235,7 +236,7 @@ So, remaining steps are to test the hyperbolic case,
 do center-of-mass conversion, differentiate drifts,
 implement higher order integrator, differentiate initial conditions,
 and differentiate transit time finding.  Then, write routines to put all of this together
-and write a Hamiltonian markov chain monte carlo code.
+and write a Hamiltonian markov chain monte carlo code. [ ]
 
 9/27/2017
 I'm having trouble getting the derivatives to work out...
@@ -245,7 +246,7 @@ Seems to be working for the planet in x-z plane!
 But, still not working for the star, nor for the y-axis (although this may
 be due to the fact that system is edge-on).
 
-There seems to be a sign error in the mass derivative.
+There seems to be a sign error in the mass derivative. [x]
 
 9/28/2017
 Okay, I debugged the two-body Kepler derivative!  There were a few problems: 1). my
@@ -265,6 +266,8 @@ precision with less computing time!  However, it's going to be more difficult
 to differentiate.
 
 10/5/2017
-Okay, let's get the derivatives to work with the phi^2 mapping.
+Okay, let's get the derivatives to work with the phi^2/DH17 mapping.
 
-
+10/6/2017
+In profiling, it looks like ~1/3 of the time is spent in allocating memory for temporary
+arrays.  It seems like this should be possible to fix.

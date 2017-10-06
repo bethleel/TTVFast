@@ -18,7 +18,7 @@ function kep_elliptic!(x0::Array{Float64,1},v0::Array{Float64,1},r0::Float64,dr0
 r0inv = inv(r0)
 beta0inv = inv(beta0)
 # Now, solve for s in elliptical Kepler case:
-if beta0 > 1e-15
+if beta0 > 0.0
 # Initial guess (if s0 = 0):
   if s0 == 0.0
     s = h*r0inv
@@ -32,7 +32,7 @@ if beta0 > 1e-15
   ds = Inf
   fac1 = k-r0*beta0
   fac2 = r0*dr0dt
-  while iter == 0 || (abs(ds) > 1e-8 && iter < 10)
+  while iter == 0 || (abs(ds) > KEPLER_TOL && iter < 10)
     xx = sqb*s
     sx = sqb*sin(xx)
     cx = cos(xx)
@@ -47,8 +47,9 @@ if beta0 > 1e-15
     ds = calc_ds_opt(y,yp,ypp,yppp)
     s += ds
     iter +=1
+#    println(iter," ds: ",ds)
   end
-#  if iter > 2
+#  if iter > 1
 #    println(iter," ",s," ",s/s0-1," ds: ",ds)
 #  end
 # Since we updated s, need to recompute:
@@ -92,7 +93,7 @@ function kep_elliptic!(x0::Array{Float64,1},v0::Array{Float64,1},r0::Float64,dr0
 r0inv = inv(r0)
 beta0inv = inv(beta0)
 # Now, solve for s in elliptical Kepler case:
-if beta0 > 1e-15
+if beta0 > 0.0
 # Initial guess (if s0 = 0):
   if s0 == 0.0
     s = h*r0inv
@@ -106,7 +107,7 @@ if beta0 > 1e-15
   ds = Inf
   fac1 = k-r0*beta0
   fac2 = r0*dr0dt
-  while iter == 0 || (abs(ds) > 1e-8 && iter < 10)
+  while iter == 0 || (abs(ds) > KEPLER_TOL && iter < 10)
     xx = sqb*s
     sx = sqb*sin(xx)
     cx = cos(xx)
@@ -121,8 +122,9 @@ if beta0 > 1e-15
     ds = calc_ds_opt(y,yp,ypp,yppp)
     s += ds
     iter +=1
+#    println(iter," ds: ",ds)
   end
-#  if iter > 2
+#  if iter > 1
 #    println(iter," ",s," ",s/s0-1," ds: ",ds)
 #  end
 # Since we updated s, need to recompute:
@@ -171,7 +173,7 @@ function kep_hyperbolic!(x0::Array{Float64,1},v0::Array{Float64,1},r0::Float64,d
 r0inv = inv(r0)
 beta0inv = inv(beta0)
 # Now, solve for s in hyperbolic Kepler case:
-if beta0 < -1e-15
+if beta0 < 0.0
 # Initial guess (if s0 = 0):
   if s0 == 0.0
     s = h*r0inv
@@ -185,7 +187,7 @@ if beta0 < -1e-15
   ds = Inf
   fac1 = k-r0*beta0
   fac2 = r0*dr0dt
-  while iter == 0 || (abs(ds) > 1e-8 && iter < 10)
+  while iter == 0 || (abs(ds) > KEPLER_TOL && iter < 10)
     xx = sqb*s; cx = cosh(xx); sx = sqb*(exp(xx)-cx)
 # Third derivative:
     yppp = fac1*cx + fac2*sx
@@ -198,8 +200,9 @@ if beta0 < -1e-15
     ds = calc_ds_opt(y,yp,ypp,yppp)
     s += ds
     iter +=1
+#    println(iter," ds: ",ds)
   end
-#  if iter > 2
+#  if iter > 1
 #    #println("iter: ",iter," ds/s: ",ds/s0)
 #    println(iter," ",s," ",s/s0-1," ds: ",ds)
 #  end
@@ -242,7 +245,7 @@ function kep_hyperbolic!(x0::Array{Float64,1},v0::Array{Float64,1},r0::Float64,d
 r0inv = inv(r0)
 beta0inv = inv(beta0)
 # Now, solve for s in hyperbolic Kepler case:
-if beta0 < -1e-15
+if beta0 < 0.0
 # Initial guess (if s0 = 0):
   if s0 == 0.0
     s = h*r0inv
@@ -256,7 +259,7 @@ if beta0 < -1e-15
   ds = Inf
   fac1 = k-r0*beta0
   fac2 = r0*dr0dt
-  while iter == 0 || (abs(ds) > 1e-8 && iter < 10)
+  while iter == 0 || (abs(ds) > KEPLER_TOL && iter < 10)
     xx = sqb*s; cx = cosh(xx); sx = sqb*(exp(xx)-cx)
 # Third derivative:
     yppp = fac1*cx + fac2*sx
@@ -269,8 +272,9 @@ if beta0 < -1e-15
     ds = calc_ds_opt(y,yp,ypp,yppp)
     s += ds
     iter +=1
+#    println(iter," ds: ",ds)
   end
-#  if iter > 2
+#  if iter > 1
 #    #println("iter: ",iter," ds/s: ",ds/s0)
 #    println(iter," ",s," ",s/s0-1," ds: ",ds)
 #  end

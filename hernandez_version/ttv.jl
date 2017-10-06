@@ -5,16 +5,36 @@
 const YEAR  = 365.242
 const GNEWT = 39.4845/YEAR^2
 const NDIM  = 3
+const KEPLER_TOL = 1e-5
 const third = 1./3.
 include("kepler_step.jl")
 include("init_nbody.jl")
 
+function extrapolate_s!(n::Int64,spred::Array{Float64,2},ssave::Array{Float64,3})
+# Extrapolate s values for faster Kepler solvers:
+for i=1:n
+  for j=1:n
+    stmp = spred[i,j]
+    if spred[i,j]!= 0. && ssave[i,j,2] != 0. && ssave[i,j,1] != 0.
+      # Quadratic extrapolation from prior three steps:
+      spred[i,j] = 3.0*stmp - 3.0*ssave[i,j,1] + ssave[i,j,2]
+    end
+    ssave[i,j,2] = ssave[i,j,1]
+    ssave[i,j,1] = stmp
+  end
+end
+return
+end
+
 function ttv!(n::Int64,t0::Float64,h::Float64,tmax::Float64,elements::Array{Float64,2},tt::Array{Float64,2},count::Array{Int64,1})
-fcons = open("fcons.txt","w");
-m=zeros(n)
-x=zeros(NDIM,n)
-v=zeros(NDIM,n)
-ssave = zeros(n,n,3)
+#fcons = open("fcons.txt","w");
+m=zeros(Float64,n)
+x=zeros(Float64,NDIM,n)
+v=zeros(Float64,NDIM,n)
+# Save the "s" factors to extrapolate for future steps:
+ssave = zeros(Float64,n,n,2)
+# Predict values of s:
+spred = zeros(Float64,n,n)
 # Fill the transit-timing array with zeros:
 fill!(tt,0.0)
 # Counter for transits of each planet:
@@ -29,19 +49,22 @@ vprior = copy(v)
 # Set the time to the initial time:
 t = t0
 # Set step counter to zero:
-i=0
+istep = 0
+# Jacobian for each step (n planets, 7 elements+mass -> n planets, 7 elements+mass):
+jac_step = zeros(Float64,n,n,7,7)
 # Save the g function, which computes the relative sky velocity dotted with relative position
 # between the planets and star:
-gsave = zeros(n)
+gsave = zeros(Float64,n)
 # Loop over time steps:
 while t < t0+tmax
   # Increment time by the time step:
   t += h
   # Increment counter by one:
-  i +=1
+  istep +=1
   # Carry out a phi^2 mapping step:
 #  phi2!(x,v,h,m,n)
-  dh17!(x,v,h,m,n)
+  dh17!(x,v,h,m,n,spred,ssave,jac_step)
+#  extrapolate_s!(n,spred,ssave)
   # Check to see if a transit may have occured.  Sky is x-y plane; line of sight is z.
   # Star is body 1; planets are 2-nbody:
   for i=2:n
@@ -90,14 +113,14 @@ return
 end
 
 # Carries out a Kepler step for bodies i & j
-function keplerij!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64)
+function keplerij!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64,spred::Array{Float64,2})
 # The state vector has: 1 time; 2-4 position; 5-7 velocity; 8 r0; 9 dr0dt; 10 beta; 11 s; 12 ds
 # Initial state:
 state0 = zeros(Float64,12)
 # Final state (after a step):
 state = zeros(Float64,12)
-delx = zeros(NDIM)
-delv = zeros(NDIM)
+delx = zeros(Float64,NDIM)
+delv = zeros(Float64,NDIM)
 for k=1:NDIM
   state0[1+k     ] = x[k,i] - x[k,j]
   state0[1+k+NDIM] = v[k,i] - v[k,j]
@@ -109,15 +132,18 @@ if gm == 0
     x[k,j] += h*v[k,j]
   end
 else
+  # predicted value of s
+  state0[11]=spred[i,j]
   kepler_step!(gm, h, state0, state)
   for k=1:NDIM
     delx[k] = state[1+k] - state0[1+k]
     delv[k] = state[1+NDIM+k] - state0[1+NDIM+k]
   end
+  spred[i,j]=state[11]
 # Advance center of mass:
 # Compute COM coords:
   mijinv =1.0/(m[i] + m[j])
-  vcm = zeros(NDIM)
+  vcm = zeros(Float64,NDIM)
   for k=1:NDIM
     vcm[k] = (m[i]*v[k,i] + m[j]*v[k,j])*mijinv
   end
@@ -127,14 +153,14 @@ return
 end
 
 # Carries out a Kepler step for bodies i & j
-function keplerij!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64,jac_ij::Array{Float64,2})
+function keplerij!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64,spred::Array{Float64,2},jac_ij::Array{Float64,2})
 # The state vector has: 1 time; 2-4 position; 5-7 velocity; 8 r0; 9 dr0dt; 10 beta; 11 s; 12 ds
 # Initial state:
 state0 = zeros(Float64,12)
 # Final state (after a step):
 state = zeros(Float64,12)
-delx = zeros(NDIM)
-delv = zeros(NDIM)
+delx = zeros(Float64,NDIM)
+delv = zeros(Float64,NDIM)
 # jac_ij should be the Jacobian for going from (x_{0,i},v_{0,i},m_i) &  (x_{0,j},v_{0,j},m_j)
 # to  (x_i,v_i,m_i) &  (x_j,v_j,m_j), a 14x14 matrix for the 3-dimensional case. 
 # Fill with zeros for now:
@@ -146,7 +172,7 @@ end
 gm = GNEWT*(m[i]+m[j])
 # The following jacobian is just computed for the Keplerian coordinates (i.e. doesn't include
 # center-of-mass motion, or scale to motion of bodies about their common center of mass):
-jac_kepler = zeros(7,7)
+jac_kepler = zeros(Float64,7,7)
 kepler_step!(gm, h, state0, state, jac_kepler)
 for k=1:NDIM
   delx[k] = state[1+k] - state0[1+k]
@@ -154,8 +180,8 @@ for k=1:NDIM
 end
 # Compute COM coords:
 mijinv =1.0/(m[i] + m[j])
-xcm = zeros(NDIM)
-vcm = zeros(NDIM)
+xcm = zeros(Float64,NDIM)
+vcm = zeros(Float64,NDIM)
 mi = m[i]*mijinv # Normalize the masses
 mj = m[j]*mijinv
 for k=1:NDIM
@@ -228,26 +254,26 @@ end
 return
 end
 
-function phisalpha!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},alpha::Float64,n::Int64)
+function phisalpha!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},alpha::Float64,n::Int64,jac_step::Array{Float64,4})
 # Computes the 4th-order correction:
 #function [v] = phisalpha(x,v,h,m,alpha)
 #n = size(m,2);
-a = zeros(3,n)
-rij = zeros(3)
-aij = zeros(3)
+a = zeros(Float64,3,n)
+rij = zeros(Float64,3)
+aij = zeros(Float64,3)
+coeff = alpha*h^3/96*2*GNEWT
+fac = 0.0; fac1 = 0.0; fac2 = 0.0; r1 = 0.0; r2 = 0.0; r3 = 0.0
 for i=1:n
   for j = i+1:n
     for k=1:3
       rij[k] = x[k,i] - x[k,j]
     end
-#    r2 = sum(rij.^2)
-    r2 = dot(rij,rij)
-#    r3 = r2.^(1.5)
+    r2 = rij[1]*rij[1]+rij[2]*rij[2]+rij[3]*rij[3]
     r3 = r2*sqrt(r2)
     for k=1:3
       fac = GNEWT*rij[k]./r3
-      a[k,i] = a[k,i] - m[j]*fac
-      a[k,j] = a[k,j] + m[i]*fac
+      a[k,i] -= m[j]*fac
+      a[k,j] += m[i]*fac
     end
   end
 end
@@ -257,15 +283,16 @@ for i=1:n
       aij[k] = a[k,i] - a[k,j]
       rij[k] = x[k,i] - x[k,j]
     end
-#    r2 = sum(rij.^2)
-    r2 = dot(rij,rij)
+    r2 = rij[1]*rij[1]+rij[2]*rij[2]+rij[3]*rij[3]
     r1 = sqrt(r2)
-#    ardot = sum(aij.*rij)
-    ardot = dot(aij,rij)
+    ardot = aij[1]*rij[1]+aij[2]*rij[2]+aij[3]*rij[3]
+    fac1 = coeff/r1^5
+    fac2 = (2*GNEWT*(m[i]+m[j])/r1 + 3*ardot) 
     for k=1:3
-      fac = alpha*h^3/96*2*GNEWT/r1^5*(rij[k]*(2*GNEWT*(m[i]+m[j])/r1 + 3*ardot) - r2*aij[k])
-      v[k,i] = v[k,i] + m[j]*fac
-      v[k,j] = v[k,j] - m[i]*fac
+#      fac = coeff/r1^5*(rij[k]*(2*GNEWT*(m[i]+m[j])/r1 + 3*ardot) - r2*aij[k])
+      fac = fac1*(rij[k]*fac2- r2*aij[k])
+      v[k,i] += m[j]*fac
+      v[k,j] -= m[i]*fac
     end
   end
 end
@@ -273,28 +300,29 @@ return
 end
 
 # Carries out the DH17 mapping
-function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64)
+function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,spred::Array{Float64,2},ssave::Array{Float64,3},jac_step::Array{Float64,4})
 alpha = 0.25
 # alpha = 0. is similar in precision to alpha=0.25
-#alpha = 0.
-phisalpha!(x,v,h,m,alpha,n)
+phisalpha!(x,v,h,m,alpha,n,jac_step)
 drift!(x,v,h/2,n)
 for i=1:n-1
   for j=i+1:n
     driftij!(x,v,i,j,-h/2)
-    keplerij!(m,x,v,i,j,h/2)
+    keplerij!(m,x,v,i,j,h/2,spred)
   end
 end
-phisalpha!(x,v,h,m,2.*(1.-alpha),n)
+extrapolate_s!(n,spred,ssave)
+phisalpha!(x,v,h,m,2.*(1.-alpha),n,jac_step)
 #phisalpha!(x,v,h,m,2.,n)
 for i=n-1:-1:1
   for j=n:-1:i+1
-    keplerij!(m,x,v,i,j,h/2)
+    keplerij!(m,x,v,i,j,h/2,spred)
     driftij!(x,v,i,j,-h/2)
   end
 end
+extrapolate_s!(n,spred,ssave)
 drift!(x,v,h/2,n)
-phisalpha!(x,v,h,m,alpha,n)
+phisalpha!(x,v,h,m,alpha,n,jac_step)
 return
 end
 
@@ -329,7 +357,7 @@ gm = GNEWT*(m[i]+m[1])
 iter = 0
 accel1= 0.
 accel2= 0.
-accel = zeros(3)
+accel = zeros(Float64,3)
 while abs(dt) > 1e-8 && iter < 20
   # Advance planet state at start of step to estimated transit time:
   kepler_step!(gm,    tt, s10, s1)
@@ -364,4 +392,3 @@ end
 # Note: this is the time elapsed *after* the beginning of the timestep:
 return tt
 end
-
