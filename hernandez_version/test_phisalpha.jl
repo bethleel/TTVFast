@@ -12,11 +12,11 @@ n = 3
 t0 = 7257.93115525
 h  = 0.05
 tmax = 600.0
-dlnq = 1e-5
+dlnq = 1e-4
 
 elements = readdlm("elements.txt",',')
-elements[2,1] = 0.1
-elements[3,1] = 0.1
+elements[2,1] = 1.0
+elements[3,1] = 1.0
 
 m =zeros(n)
 x0=zeros(3,n)
@@ -39,8 +39,10 @@ x0,v0 = init_nbody(elements,t0,n)
 # Tilt the orbits a bit:
 x0[2,1] = 5e-1*sqrt(x0[1,1]^2+x0[3,1]^2)
 x0[2,2] = -5e-1*sqrt(x0[1,2]^2+x0[3,2]^2)
+x0[2,3] = -5e-1*sqrt(x0[1,2]^2+x0[3,2]^2)
 v0[2,1] = 5e-1*sqrt(v0[1,1]^2+v0[3,1]^2)
 v0[2,2] = -5e-1*sqrt(v0[1,2]^2+v0[3,2]^2)
+v0[2,3] = -5e-1*sqrt(v0[1,2]^2+v0[3,2]^2)
 
 # Take a step:
 dh17!(x0,v0,h,m,n,spred,ssave)
@@ -50,7 +52,6 @@ dh17!(x0,v0,h,m,n,spred,ssave)
 x = copy(x0)
 v = copy(v0)
 m = copy(m0)
-
 # Compute jacobian exactly:
 phisalpha!(x,v,h,m,alpha,n,jac_step)
 # Save these so that I can compute derivatives numerically:
@@ -67,7 +68,7 @@ for j=1:n
   # Initial positions, velocities & masses:
     x = copy(x0)
     v = copy(v0)
-    m = copy(msave)
+    m = copy(m0)
     dq = dlnq * x[jj,j]
     if x[jj,j] != 0.0
       x[jj,j] +=  dq
@@ -85,7 +86,7 @@ for j=1:n
     end
     x=copy(x0)
     v=copy(v0)
-    m=copy(msave)
+    m=copy(m0)
     dq = dlnq * v[jj,j]
     if v[jj,j] != 0.0
       v[jj,j] +=  dq
@@ -104,7 +105,7 @@ for j=1:n
 # Now vary mass of planet:
   x=copy(x0)
   v=copy(v0)
-  m=copy(msave)
+  m=copy(m0)
   dq = m[j]*dlnq
   m[j] += dq
   phisalpha!(x,v,h,m,alpha,n)
@@ -125,7 +126,7 @@ end
 for j=1:3
   for i=1:7
     for k=1:3
-      println(jac_step[i,j,:,k]," ",jac_step_num[i,j,:,k])
+      println(jac_step[i,j,:,k]," ",jac_step_num[i,j,:,k]," ",jac_step[i,j,:,k]./jac_step_num[i,j,:,k]-1.)
     end
   end
 end

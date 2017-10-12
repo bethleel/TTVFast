@@ -347,6 +347,7 @@ for i=1:n
   for j=i+1:n
     for k=1:3
       aij[k] = a[k,i] - a[k,j]
+#      aij[k] = 0.0
       rij[k] = x[k,i] - x[k,j]
     end
     r2 = rij[1]*rij[1]+rij[2]*rij[2]+rij[3]*rij[3]
@@ -398,34 +399,37 @@ for i=1:n-1
       for p=1:3
         dadq[k,i,p,i] += fac*m[j]*rij[p]
         dadq[k,i,p,j] -= fac*m[j]*rij[p]
-        dadq[k,j,p,j] -= fac*m[i]*rij[p]
-        dadq[k,j,p,i] += fac*m[i]*rij[p]
+        dadq[k,j,p,j] += fac*m[i]*rij[p]
+        dadq[k,j,p,i] -= fac*m[i]*rij[p]
       end
       # Final term has no dot product, so just diagonal:
       fac = GNEWT/r3
       dadq[k,i,k,i] -= fac*m[j]
       dadq[k,i,k,j] += fac*m[j]
-      dadq[k,j,k,j] += fac*m[i]
-      dadq[k,j,k,i] -= fac*m[i]
+      dadq[k,j,k,j] -= fac*m[i]
+      dadq[k,j,k,i] += fac*m[i]
     end
   end
 end
+# Delete this when finished debugging:
+#fill!(dadq,0.0)
 # Next, compute \tilde g_i acceleration vector (this is rewritten
 # slightly to avoid reference to \tilde a_i):
-fill!(jac_step,0.)
+fill!(jac_step,0.0)
 # Note that jac_step[k,i,p,j] is the derivative of the kth coordinate
 # of planet i with respect to the pth coordinate of planet j.
 for i=1:n-1
   for j=i+1:n
     for k=1:3
       aij[k] = a[k,i] - a[k,j]
+#      aij[k] = 0.0
       rij[k] = x[k,i] - x[k,j]
     end
     # Compute dot product of r_ij with \delta a_ij:
-    fill!(dotdadq,0.)
-    for k=1:3
-      for p=1:4
-        for d=1:n
+    fill!(dotdadq,0.0)
+    for p=1:4
+      for d=1:n
+        for k=1:3
           dotdadq[p,d] += rij[k]*(dadq[k,i,p,d]-dadq[k,j,p,d])
         end
       end
@@ -448,9 +452,8 @@ for i=1:n-1
       for p=1:3
         jac_step[3+k,i,p,i] -= fac*m[j]*rij[p]
         jac_step[3+k,i,p,j] += fac*m[j]*rij[p]
-        # Three sign changes in rij[k]*rij[p]*\delta rij[p], so signs flip:
-        jac_step[3+k,j,p,j] += fac*m[i]*rij[p]
-        jac_step[3+k,j,p,i] -= fac*m[i]*rij[p]
+        jac_step[3+k,j,p,j] -= fac*m[i]*rij[p]
+        jac_step[3+k,j,p,i] += fac*m[i]*rij[p]
       end
       # Second mass derivative:
       fac = 2*GNEWT*fac1*rij[k]/r1
@@ -463,16 +466,16 @@ for i=1:n-1
       fac = fac1*fac2
       jac_step[3+k,i,k,i] += fac*m[j]
       jac_step[3+k,i,k,j] -= fac*m[j]
-      jac_step[3+k,j,k,j] -= fac*m[i]
-      jac_step[3+k,j,k,i] += fac*m[i]
+      jac_step[3+k,j,k,j] += fac*m[i]
+      jac_step[3+k,j,k,i] -= fac*m[i]
       # Dot product \delta rij terms:
       fac = -2*fac1*(rij[k]*GNEWT*(m[i]+m[j])/(r2*r1)+aij[k])
       for p=1:3
         fac3 = fac*rij[p] + fac1*3.0*rij[k]*aij[p]
         jac_step[3+k,i,p,i] += m[j]*fac3
         jac_step[3+k,i,p,j] -= m[j]*fac3
-        jac_step[3+k,j,p,j] -= m[i]*fac3
-        jac_step[3+k,j,p,i] += m[i]*fac3
+        jac_step[3+k,j,p,j] += m[i]*fac3
+        jac_step[3+k,j,p,i] -= m[i]*fac3
       end
       # Diagonal acceleration terms:
       fac = -fac1*r2
@@ -480,11 +483,11 @@ for i=1:n-1
       for d=1:n
         for p=1:3
           jac_step[3+k,i,p,d] += fac*m[j]*(dadq[k,i,p,d]-dadq[k,j,p,d])
-          jac_step[3+k,j,p,d] += fac*m[i]*(dadq[k,j,p,d]-dadq[k,i,p,d])
+          jac_step[3+k,j,p,d] -= fac*m[i]*(dadq[k,i,p,d]-dadq[k,j,p,d])
         end
         # Don't forget mass-dependent term:
         jac_step[3+k,i,7,d] += fac*m[j]*(dadq[k,i,4,d]-dadq[k,j,4,d])
-        jac_step[3+k,j,7,d] += fac*m[i]*(dadq[k,j,4,d]-dadq[k,i,4,d])
+        jac_step[3+k,j,7,d] -= fac*m[i]*(dadq[k,i,4,d]-dadq[k,j,4,d])
       end
       # Now, for the hardest term:  (\delta a_ij . r_ij ) r_ij [ ]
       fac = 3.*fac1*rij[k]
@@ -498,6 +501,8 @@ for i=1:n-1
       end
     end
   end
+end
+for i=1:n
   for k=1:3
   # Position remains unchanged, so Jacobian of position should be identity matrix:
     jac_step[  k,i,  k,i] += 1.0
