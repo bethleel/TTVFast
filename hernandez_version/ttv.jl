@@ -26,6 +26,71 @@ end
 return
 end
 
+function ttv!(n::Int64,t0::Float64,h::Float64,tmax::Float64,elements::Array{Float64,2},tt::Array{Float64,2},count::Array{Int64,1},jacobian::Array{Float64,2})
+#fcons = open("fcons.txt","w");
+m=zeros(Float64,n)
+x=zeros(Float64,NDIM,n)
+v=zeros(Float64,NDIM,n)
+# Save the "s" factors to extrapolate for future steps:
+ssave = zeros(Float64,n,n,2)
+# Predict values of s:
+spred = zeros(Float64,n,n)
+# Fill the transit-timing array with zeros:
+fill!(tt,0.0)
+# Counter for transits of each planet:
+fill!(count,0)
+for i=1:n
+  m[i] = elements[i,1]
+end
+# Initialize the N-body problem using nested hierarchy of Keplerians:
+x,v = init_nbody(elements,t0,n)
+xprior = copy(x)
+vprior = copy(v)
+# Set the time to the initial time:
+t = t0
+# Set step counter to zero:
+istep = 0
+# Jacobian for each step (7 elements+mass, n_planets, 7 elements+mass, n planets):
+jac_step = zeros(Float64,7,n,7,n)
+# Save the g function, which computes the relative sky velocity dotted with relative position
+# between the planets and star:
+gsave = zeros(Float64,n)
+# Loop over time steps:
+while t < t0+tmax
+  # Increment time by the time step:
+  t += h
+  # Increment counter by one:
+  istep +=1
+  # Carry out a phi^2 mapping step:
+#  phi2!(x,v,h,m,n)
+  dh17!(x,v,h,m,n,spred,ssave,jac_step)
+#  extrapolate_s!(n,spred,ssave)
+  # Check to see if a transit may have occured.  Sky is x-y plane; line of sight is z.
+  # Star is body 1; planets are 2-nbody:
+  for i=2:n
+    # Compute the relative sky velocity dotted with position:
+    gi = g!(i,1,x,v)
+    ri = sqrt(x[1,i]^2+x[2,i]^2+x[3,i]^2)
+    # See if sign switches, and if planet is in front of star (by a good amount):
+    if gi > 0 && gsave[i] < 0 && x[3,i] > 0.25*ri
+      # A transit has occurred between the time steps.
+      # Approximate the planet-star motion as a Keplerian, weighting over timestep:
+      count[i] += 1
+      tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
+    end
+    gsave[i] = gi
+  end
+  # Save the current state as prior state:
+  for i=1:NDIM
+    for j=1:n
+      xprior[i,j]=x[i,j]
+      vprior[i,j]=v[i,j]
+    end
+  end
+end
+return 
+end
+
 function ttv!(n::Int64,t0::Float64,h::Float64,tmax::Float64,elements::Array{Float64,2},tt::Array{Float64,2},count::Array{Int64,1})
 #fcons = open("fcons.txt","w");
 m=zeros(Float64,n)
@@ -50,8 +115,7 @@ vprior = copy(v)
 t = t0
 # Set step counter to zero:
 istep = 0
-# Jacobian for each step (n planets, 7 elements+mass -> n planets, 7 elements+mass):
-jac_step = zeros(Float64,n,n,7,7)
+# Jacobian for each step (7 elements+mass, n_planets, 7 elements+mass, n planets):
 # Save the g function, which computes the relative sky velocity dotted with relative position
 # between the planets and star:
 gsave = zeros(Float64,n)
@@ -63,7 +127,7 @@ while t < t0+tmax
   istep +=1
   # Carry out a phi^2 mapping step:
 #  phi2!(x,v,h,m,n)
-  dh17!(x,v,h,m,n,spred,ssave,jac_step)
+  dh17!(x,v,h,m,n,spred,ssave)
 #  extrapolate_s!(n,spred,ssave)
   # Check to see if a transit may have occured.  Sky is x-y plane; line of sight is z.
   # Star is body 1; planets are 2-nbody:
@@ -254,7 +318,7 @@ end
 return
 end
 
-function phisalpha!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},alpha::Float64,n::Int64,jac_step::Array{Float64,4})
+function phisalpha!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},alpha::Float64,n::Int64)
 # Computes the 4th-order correction:
 #function [v] = phisalpha(x,v,h,m,alpha)
 #n = size(m,2);
@@ -271,12 +335,14 @@ for i=1:n
     r2 = rij[1]*rij[1]+rij[2]*rij[2]+rij[3]*rij[3]
     r3 = r2*sqrt(r2)
     for k=1:3
-      fac = GNEWT*rij[k]./r3
+      fac = GNEWT*rij[k]/r3
       a[k,i] -= m[j]*fac
       a[k,j] += m[i]*fac
     end
   end
 end
+# Next, compute \tilde g_i acceleration vector (this is rewritten
+# slightly to avoid reference to \tilde a_i):
 for i=1:n
   for j=i+1:n
     for k=1:3
@@ -297,6 +363,185 @@ for i=1:n
   end
 end
 return
+end
+
+function phisalpha!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},alpha::Float64,n::Int64,jac_step::Array{Float64,4})
+# Computes the 4th-order correction:
+#function [v] = phisalpha(x,v,h,m,alpha)
+#n = size(m,2);
+a = zeros(Float64,3,n)
+dadq = zeros(Float64,3,n,4,n)  # There is no velocity dependence
+dotdadq = zeros(Float64,4,n)  # There is no velocity dependence
+rij = zeros(Float64,3)
+aij = zeros(Float64,3)
+coeff = alpha*h^3/96*2*GNEWT
+fac = 0.0; fac1 = 0.0; fac2 = 0.0; fac3 = 0.0; r1 = 0.0; r2 = 0.0; r3 = 0.0
+for i=1:n-1
+  for j = i+1:n
+    for k=1:3
+      rij[k] = x[k,i] - x[k,j]
+    end
+    r2 = rij[1]*rij[1]+rij[2]*rij[2]+rij[3]*rij[3]
+    r3 = r2*sqrt(r2)
+    for k=1:3
+      fac = GNEWT*rij[k]/r3
+      a[k,i] -= m[j]*fac
+      a[k,j] += m[i]*fac
+      # Mass derivative of acceleration vector (10/6/17 notes):
+      # Since there is no velocity dependence, this is fourth parameter.
+      # Acceleration of ith particle depends on mass of jth particle:
+      dadq[k,i,4,j] -= fac
+      dadq[k,j,4,i] += fac
+      # x derivative of acceleration vector:
+      fac *= 3.0/r2
+      # Dot product x_ij.\delta x_ij means we need to sum over components:
+      for p=1:3
+        dadq[k,i,p,i] += fac*m[j]*rij[p]
+        dadq[k,i,p,j] -= fac*m[j]*rij[p]
+        dadq[k,j,p,j] -= fac*m[i]*rij[p]
+        dadq[k,j,p,i] += fac*m[i]*rij[p]
+      end
+      # Final term has no dot product, so just diagonal:
+      fac = GNEWT/r3
+      dadq[k,i,k,i] -= fac*m[j]
+      dadq[k,i,k,j] += fac*m[j]
+      dadq[k,j,k,j] += fac*m[i]
+      dadq[k,j,k,i] -= fac*m[i]
+    end
+  end
+end
+# Next, compute \tilde g_i acceleration vector (this is rewritten
+# slightly to avoid reference to \tilde a_i):
+fill!(jac_step,0.)
+# Note that jac_step[k,i,p,j] is the derivative of the kth coordinate
+# of planet i with respect to the pth coordinate of planet j.
+for i=1:n-1
+  for j=i+1:n
+    for k=1:3
+      aij[k] = a[k,i] - a[k,j]
+      rij[k] = x[k,i] - x[k,j]
+    end
+    # Compute dot product of r_ij with \delta a_ij:
+    fill!(dotdadq,0.)
+    for k=1:3
+      for p=1:4
+        for d=1:n
+          dotdadq[p,d] += rij[k]*(dadq[k,i,p,d]-dadq[k,j,p,d])
+        end
+      end
+    end
+    r2 = rij[1]*rij[1]+rij[2]*rij[2]+rij[3]*rij[3]
+    r1 = sqrt(r2)
+    ardot = aij[1]*rij[1]+aij[2]*rij[2]+aij[3]*rij[3]
+    fac1 = coeff/r1^5
+    fac2 = (2*GNEWT*(m[i]+m[j])/r1 + 3*ardot) 
+    for k=1:3
+#      fac = coeff/r1^5*(rij[k]*(2*GNEWT*(m[i]+m[j])/r1 + 3*ardot) - r2*aij[k])
+      fac = fac1*(rij[k]*fac2- r2*aij[k])
+      v[k,i] += m[j]*fac
+      v[k,j] -= m[i]*fac
+      # Mass derivative (first part is easy):
+      jac_step[3+k,i,7,j] += fac
+      jac_step[3+k,j,7,i] -= fac
+      # Position derivatives:
+      fac *= 5.0/r2
+      for p=1:3
+        jac_step[3+k,i,p,i] -= fac*m[j]*rij[p]
+        jac_step[3+k,i,p,j] += fac*m[j]*rij[p]
+        # Three sign changes in rij[k]*rij[p]*\delta rij[p], so signs flip:
+        jac_step[3+k,j,p,j] += fac*m[i]*rij[p]
+        jac_step[3+k,j,p,i] -= fac*m[i]*rij[p]
+      end
+      # Second mass derivative:
+      fac = 2*GNEWT*fac1*rij[k]/r1
+      jac_step[3+k,i,7,i] += fac*m[j]
+      jac_step[3+k,i,7,j] += fac*m[j]
+      jac_step[3+k,j,7,j] -= fac*m[i]
+      jac_step[3+k,j,7,i] -= fac*m[i]
+      #  (There's also a mass term in dadq [x]. See below.)
+      # Diagonal position terms:
+      fac = fac1*fac2
+      jac_step[3+k,i,k,i] += fac*m[j]
+      jac_step[3+k,i,k,j] -= fac*m[j]
+      jac_step[3+k,j,k,j] -= fac*m[i]
+      jac_step[3+k,j,k,i] += fac*m[i]
+      # Dot product \delta rij terms:
+      fac = -2*fac1*(rij[k]*GNEWT*(m[i]+m[j])/(r2*r1)+aij[k])
+      for p=1:3
+        fac3 = fac*rij[p] + fac1*3.0*rij[k]*aij[p]
+        jac_step[3+k,i,p,i] += m[j]*fac3
+        jac_step[3+k,i,p,j] -= m[j]*fac3
+        jac_step[3+k,j,p,j] -= m[i]*fac3
+        jac_step[3+k,j,p,i] += m[i]*fac3
+      end
+      # Diagonal acceleration terms:
+      fac = -fac1*r2
+      # Duoh.  For dadq, have to loop over all other parameters!
+      for d=1:n
+        for p=1:3
+          jac_step[3+k,i,p,d] += fac*m[j]*(dadq[k,i,p,d]-dadq[k,j,p,d])
+          jac_step[3+k,j,p,d] += fac*m[i]*(dadq[k,j,p,d]-dadq[k,i,p,d])
+        end
+        # Don't forget mass-dependent term:
+        jac_step[3+k,i,7,d] += fac*m[j]*(dadq[k,i,4,d]-dadq[k,j,4,d])
+        jac_step[3+k,j,7,d] += fac*m[i]*(dadq[k,j,4,d]-dadq[k,i,4,d])
+      end
+      # Now, for the hardest term:  (\delta a_ij . r_ij ) r_ij [ ]
+      fac = 3.*fac1*rij[k]
+      for d=1:n
+        for p=1:3
+          jac_step[3+k,i,p,d] += fac*m[j]*dotdadq[p,d]
+          jac_step[3+k,j,p,d] -= fac*m[i]*dotdadq[p,d]
+        end
+        jac_step[3+k,i,7,d] += fac*m[j]*dotdadq[4,d]
+        jac_step[3+k,j,7,d] -= fac*m[i]*dotdadq[4,d]
+      end
+    end
+  end
+  for k=1:3
+  # Position remains unchanged, so Jacobian of position should be identity matrix:
+    jac_step[  k,i,  k,i] += 1.0
+  # Jacobian of velocity has linear dependence on initial velocity
+    jac_step[3+k,i,3+k,i] += 1.0
+  end
+  # Mass remains unchanged:
+  jac_step[7,i,7,i] += 1.0
+end
+return
+end
+
+# Carries out the DH17 mapping
+function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,spred::Array{Float64,2},ssave::Array{Float64,3})
+alpha = 0.25
+# alpha = 0. is similar in precision to alpha=0.25
+phisalpha!(x,v,h,m,alpha,n)
+drift!(x,v,h/2,n)
+for i=1:n-1
+  for j=i+1:n
+    driftij!(x,v,i,j,-h/2)
+    keplerij!(m,x,v,i,j,h/2,spred)
+  end
+end
+extrapolate_s!(n,spred,ssave)
+phisalpha!(x,v,h,m,2.*(1.-alpha),n)
+#phisalpha!(x,v,h,m,2.,n)
+for i=n-1:-1:1
+  for j=n:-1:i+1
+    keplerij!(m,x,v,i,j,h/2,spred)
+    driftij!(x,v,i,j,-h/2)
+  end
+end
+extrapolate_s!(n,spred,ssave)
+drift!(x,v,h/2,n)
+phisalpha!(x,v,h,m,alpha,n)
+return
+end
+
+# Used in computing the transit time:
+function g!(i,j,x,v)
+# See equation 8-10 Fabrycky (2008) in Seager Exoplanets book
+g = (x[1,j]-x[1,i])*(v[1,j]-v[1,i])+(x[2,j]-x[2,i])*(v[2,j]-v[2,i])
+return g
 end
 
 # Carries out the DH17 mapping
@@ -324,13 +569,6 @@ extrapolate_s!(n,spred,ssave)
 drift!(x,v,h/2,n)
 phisalpha!(x,v,h,m,alpha,n,jac_step)
 return
-end
-
-# Used in computing the transit time:
-function g!(i,j,x,v)
-# See equation 8-10 Fabrycky (2008) in Seager Exoplanets book
-g = (x[1,j]-x[1,i])*(v[1,j]-v[1,i])+(x[2,j]-x[2,i])*(v[2,j]-v[2,i])
-return g
 end
 
 function findtransit!(i,h,g1,g2,m,x1,v1,x2,v2)
