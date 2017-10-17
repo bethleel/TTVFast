@@ -7,6 +7,7 @@ const GNEWT = 39.4845/YEAR^2
 const NDIM  = 3
 const KEPLER_TOL = 1e-5
 const third = 1./3.
+const alpha0 = -third
 include("kepler_step.jl")
 include("init_nbody.jl")
 
@@ -557,9 +558,11 @@ end
 
 # Carries out the DH17 mapping
 function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64)
-alpha = 0.25
+alpha = alpha0
 # alpha = 0. is similar in precision to alpha=0.25
-phisalpha!(x,v,h,m,alpha,n)
+if alpha != 0.0
+  phisalpha!(x,v,h,m,alpha,n)
+end
 drift!(x,v,h/2,n)
 for i=1:n-1
   for j=i+1:n
@@ -567,7 +570,9 @@ for i=1:n-1
     keplerij!(m,x,v,i,j,h/2)
   end
 end
-phisalpha!(x,v,h,m,2.*(1.-alpha),n)
+if alpha != 1.0
+  phisalpha!(x,v,h,m,2.*(1.-alpha),n)
+end
 #phisalpha!(x,v,h,m,2.,n)
 for i=n-1:-1:1
   for j=n:-1:i+1
@@ -576,15 +581,19 @@ for i=n-1:-1:1
   end
 end
 drift!(x,v,h/2,n)
-phisalpha!(x,v,h,m,alpha,n)
+if alpha != 0.0
+  phisalpha!(x,v,h,m,alpha,n)
+end
 return
 end
 
 # Carries out the DH17 mapping
 function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,spred::Array{Float64,2},ssave::Array{Float64,3})
-alpha = 0.25
+alpha = alpha0
 # alpha = 0. is similar in precision to alpha=0.25
-phisalpha!(x,v,h,m,alpha,n)
+if alpha != 0.0
+  phisalpha!(x,v,h,m,alpha,n)
+end
 drift!(x,v,h/2,n)
 for i=1:n-1
   for j=i+1:n
@@ -593,7 +602,9 @@ for i=1:n-1
   end
 end
 extrapolate_s!(n,spred,ssave)
-phisalpha!(x,v,h,m,2.*(1.-alpha),n)
+if alpha != 1.0
+  phisalpha!(x,v,h,m,2.*(1.-alpha),n)
+end
 #phisalpha!(x,v,h,m,2.,n)
 for i=n-1:-1:1
   for j=n:-1:i+1
@@ -603,7 +614,9 @@ for i=n-1:-1:1
 end
 extrapolate_s!(n,spred,ssave)
 drift!(x,v,h/2,n)
-phisalpha!(x,v,h,m,alpha,n)
+if alpha != 0.0
+  phisalpha!(x,v,h,m,alpha,n)
+end
 return
 end
 
@@ -616,9 +629,11 @@ end
 
 # Carries out the DH17 mapping
 function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,spred::Array{Float64,2},ssave::Array{Float64,3},jac_step::Array{Float64,4})
-alpha = 0.25
+alpha = alpha0
 # alpha = 0. is similar in precision to alpha=0.25
-phisalpha!(x,v,h,m,alpha,n,jac_step)
+if alpha != 0.0
+  phisalpha!(x,v,h,m,alpha,n,jac_step)
+end
 drift!(x,v,h/2,n)
 for i=1:n-1
   for j=i+1:n
@@ -627,7 +642,9 @@ for i=1:n-1
   end
 end
 extrapolate_s!(n,spred,ssave)
-phisalpha!(x,v,h,m,2.*(1.-alpha),n,jac_step)
+if alpha != 1.0
+  phisalpha!(x,v,h,m,2.*(1.-alpha),n,jac_step)
+end
 #phisalpha!(x,v,h,m,2.,n)
 for i=n-1:-1:1
   for j=n:-1:i+1
@@ -637,7 +654,9 @@ for i=n-1:-1:1
 end
 extrapolate_s!(n,spred,ssave)
 drift!(x,v,h/2,n)
-phisalpha!(x,v,h,m,alpha,n,jac_step)
+if alpha != 0.0
+  phisalpha!(x,v,h,m,alpha,n,jac_step)
+end
 return
 end
 
