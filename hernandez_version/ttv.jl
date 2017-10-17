@@ -7,7 +7,7 @@ const GNEWT = 39.4845/YEAR^2
 const NDIM  = 3
 const KEPLER_TOL = 1e-5
 const third = 1./3.
-const alpha0 = -third
+const alpha0 = 0.0
 include("kepler_step.jl")
 include("init_nbody.jl")
 
@@ -77,7 +77,8 @@ while t < t0+tmax
       # A transit has occurred between the time steps.
       # Approximate the planet-star motion as a Keplerian, weighting over timestep:
       count[i] += 1
-      tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
+#      tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
+      tt[i,count[i]]=t+findtransit2!(1,i,h,gi,gsave[i],m,xprior,vprior)
     end
     gsave[i] = gi
   end
@@ -142,7 +143,7 @@ while t < t0+tmax
       # Approximate the planet-star motion as a Keplerian, weighting over timestep:
       count[i] += 1
 #      tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
-      tt[i,count[i]]=t+findtransit2!(1,i,h,gi,gsave[i],m,xprior,vprior,spred,ssave)
+      tt[i,count[i]]=t+findtransit2!(1,i,h,gi,gsave[i],m,xprior,vprior)
     end
     gsave[i] = gi
   end
@@ -559,15 +560,16 @@ end
 # Carries out the DH17 mapping
 function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64)
 alpha = alpha0
+h2 = 0.5*h
 # alpha = 0. is similar in precision to alpha=0.25
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n)
 end
-drift!(x,v,h/2,n)
+drift!(x,v,h2,n)
 for i=1:n-1
   for j=i+1:n
-    driftij!(x,v,i,j,-h/2)
-    keplerij!(m,x,v,i,j,h/2)
+    driftij!(x,v,i,j,-h2)
+    keplerij!(m,x,v,i,j,h2)
   end
 end
 if alpha != 1.0
@@ -576,11 +578,11 @@ end
 #phisalpha!(x,v,h,m,2.,n)
 for i=n-1:-1:1
   for j=n:-1:i+1
-    keplerij!(m,x,v,i,j,h/2)
-    driftij!(x,v,i,j,-h/2)
+    keplerij!(m,x,v,i,j,h2)
+    driftij!(x,v,i,j,-h2)
   end
 end
-drift!(x,v,h/2,n)
+drift!(x,v,h2,n)
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n)
 end
@@ -590,15 +592,16 @@ end
 # Carries out the DH17 mapping
 function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,spred::Array{Float64,2},ssave::Array{Float64,3})
 alpha = alpha0
+h2 = 0.5*h
 # alpha = 0. is similar in precision to alpha=0.25
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n)
 end
-drift!(x,v,h/2,n)
-for i=1:n-1
+drift!(x,v,h2,n)
+@inbounds for i=1:n-1
   for j=i+1:n
-    driftij!(x,v,i,j,-h/2)
-    keplerij!(m,x,v,i,j,h/2,spred)
+    driftij!(x,v,i,j,-h2)
+    keplerij!(m,x,v,i,j,h2,spred)
   end
 end
 extrapolate_s!(n,spred,ssave)
@@ -606,14 +609,14 @@ if alpha != 1.0
   phisalpha!(x,v,h,m,2.*(1.-alpha),n)
 end
 #phisalpha!(x,v,h,m,2.,n)
-for i=n-1:-1:1
+@inbounds for i=n-1:-1:1
   for j=n:-1:i+1
-    keplerij!(m,x,v,i,j,h/2,spred)
-    driftij!(x,v,i,j,-h/2)
+    keplerij!(m,x,v,i,j,h2,spred)
+    driftij!(x,v,i,j,-h2)
   end
 end
 extrapolate_s!(n,spred,ssave)
-drift!(x,v,h/2,n)
+drift!(x,v,h2,n)
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n)
 end
@@ -621,7 +624,7 @@ return
 end
 
 # Used in computing the transit time:
-function g!(i,j,x,v)
+function g!(i::Int64,j::Int64,x::Array{Float64,2},v::Array{Float64,2})
 # See equation 8-10 Fabrycky (2008) in Seager Exoplanets book
 g = (x[1,j]-x[1,i])*(v[1,j]-v[1,i])+(x[2,j]-x[2,i])*(v[2,j]-v[2,i])
 return g
@@ -629,16 +632,17 @@ end
 
 # Carries out the DH17 mapping
 function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,spred::Array{Float64,2},ssave::Array{Float64,3},jac_step::Array{Float64,4})
+h2 = 0.5*h
 alpha = alpha0
 # alpha = 0. is similar in precision to alpha=0.25
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n,jac_step)
 end
-drift!(x,v,h/2,n)
+drift!(x,v,h2,n)
 for i=1:n-1
   for j=i+1:n
-    driftij!(x,v,i,j,-h/2)
-    keplerij!(m,x,v,i,j,h/2,spred)
+    driftij!(x,v,i,j,-h2)
+    keplerij!(m,x,v,i,j,h2,spred)
   end
 end
 extrapolate_s!(n,spred,ssave)
@@ -648,12 +652,12 @@ end
 #phisalpha!(x,v,h,m,2.,n)
 for i=n-1:-1:1
   for j=n:-1:i+1
-    keplerij!(m,x,v,i,j,h/2,spred)
-    driftij!(x,v,i,j,-h/2)
+    keplerij!(m,x,v,i,j,h2,spred)
+    driftij!(x,v,i,j,-h2)
   end
 end
 extrapolate_s!(n,spred,ssave)
-drift!(x,v,h/2,n)
+drift!(x,v,h2,n)
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n,jac_step)
 end
@@ -788,7 +792,7 @@ end
 return tt
 end
 
-function findtransit2!(i,j,h,g1,g2,m,x1,v1,spred,ssave)
+function findtransit2!(i::Int64,j::Int64,h::Float64,g1::Float64,g2::Float64,m::Array{Float64,1},x1::Array{Float64,2},v1::Array{Float64,2})
 # Computes the transit time, approximating the motion as a fraction of a DH17 step forward in time.
 # Initial guess using linear interpolation:
 tt = -g1*h/(g2-g1)
@@ -806,7 +810,7 @@ while abs(dt) > 1e-8 && iter < 20
   # Compute time offset:
   gsky = g!(i,j,x,v)
   # Compute gravitational acceleration in sky plane dotted with sky position:
-  gdot = 0.
+  gdot = 0.0
   for k=1:n
     if k != i
       r3 = sqrt((x[1,k]-x[1,i])^2+(x[2,k]-x[2,i])^2 +(x[3,k]-x[3,i])^2)^3
