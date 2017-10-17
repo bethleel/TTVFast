@@ -606,14 +606,14 @@ while abs(dt) > 1e-8 && iter < 20
   kepler_step!(gm,    tt, s10, s1)
   # Reverse planet state at end of step to estimated transit time:
   kepler_step!(gm, -h+tt, s20, s2)
+  # Weight:
+  w = tt/h
   # Compute weighting of states:
   for j=2:7
-    s[j] = (s1[j]*(h-tt)+s2[j]*tt)/h
+    s[j] = (1.0-w)*s1[j]+w*s2[j]
   end
   # Compute time offset:
   g = s[2]*s[5]+s[3]*s[6]
-  # Weight:
-  w = tt/h
   # Compute gravitational acceleration
   r1_3 = norm(s1[2:4])^3
   r2_3 = norm(s2[2:4])^3
@@ -632,6 +632,74 @@ while abs(dt) > 1e-8 && iter < 20
   tt += dt
   iter +=1
 end
+# Note: this is the time elapsed *after* the beginning of the timestep:
+return tt
+end
+
+function findtransit!(i,h,g1,g2,m,x1,v1,x2,v2,dtdqn)
+# Computes the transit time, approximating the motion
+# as a Keplerian forward & backward in time, weighted by location in the timestep.
+# Initial guess using linear interpolation:
+tt = -g1*h/(g2-g1)
+dt = 1.0
+
+# Vector for computing derivative with respect to the initial and final elements
+# of the planet & star -  2 planets with 7 elements/masses at two times (initial & final):
+dtdqn = zeros(7,2,2)
+
+# Setup state vectors for kepler_step:
+s10 = zeros(Float64,12)
+s20 = zeros(Float64,12)
+# Final state (after a step):
+s1 = zeros(Float64,12)
+s2 = zeros(Float64,12)
+s = zeros(Float64,12)
+for k=1:NDIM
+  s10[1+k     ] = x1[k,i] - x1[k,1]
+  s10[1+k+NDIM] = v1[k,i] - v1[k,1]
+  s20[1+k     ] = x2[k,i] - x2[k,1]
+  s20[1+k+NDIM] = v2[k,i] - v2[k,1]
+end
+gm = GNEWT*(m[i]+m[1])
+iter = 0
+accel1= 0.
+accel2= 0.
+accel = zeros(Float64,3)
+while abs(dt) > 1e-8 && iter < 20
+  # Advance planet state at start of step to estimated transit time:
+  kepler_step!(gm,    tt, s10, s1)
+  # Reverse planet state at end of step to estimated transit time:
+  kepler_step!(gm, -h+tt, s20, s2)
+  # Weight:
+  w = tt/h
+  # Compute weighting of states:
+  for j=2:7
+    s[j] = (1.0-w)*s1[j]+w*s2[j]
+  end
+  # Compute time offset:
+  g = s[2]*s[5]+s[3]*s[6]
+  # Compute gravitational acceleration
+  r1_3 = norm(s1[2:4])^3
+  r2_3 = norm(s2[2:4])^3
+  for k=1:3
+    accel1 = -gm*s1[k+1]/r1_3
+    accel2 = -gm*s2[k+1]/r2_3
+    accel[k] = accel1*(1.0-w)+accel2*w
+  end
+  # Compute derivative of g with respect to time:
+  gdot = s[5]^2+s[6]^2+s[2]*accel[1]+s[3]*accel[2]
+  # Include time derivatives of interpolation (10/4/17 notes):
+  gdot += ((s2[2]-s1[2])*s[5] + (s2[5]-s1[5])*s[2] +(s2[3]-s1[3])*s[6]+(s2[6]-s1[6])*s[3])/h
+  # Refine estimate of transit time with Newton's method:
+  dt = -g/gdot
+  # Add refinement to estimated time:
+  tt += dt
+  iter +=1
+end
+# Now compute derivative of transit time with respect to initial (& final)
+# positions & masses of the planet/star:
+
+
 # Note: this is the time elapsed *after* the beginning of the timestep:
 return tt
 end
