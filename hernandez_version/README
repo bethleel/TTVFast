@@ -271,3 +271,10 @@ Okay, let's get the derivatives to work with the phi^2/DH17 mapping.
 10/6/2017
 In profiling, it looks like ~1/3 of the time is spent in allocating memory for temporary
 arrays.  It seems like this should be possible to fix.
+
+10/17/2017
+Okay, for transit time finding I'm now doing a full integration over a fraction of
+a step.  This has the advantage that it will work for any hierarchical configuration.
+It also has the advantage that it gives higher precision for the transit times, and
+makes the derivative computation slightly simpler.  It has the disadvantage that it
+takes longer to run, but only by ~30-50%.

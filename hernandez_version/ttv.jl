@@ -140,7 +140,8 @@ while t < t0+tmax
       # A transit has occurred between the time steps.
       # Approximate the planet-star motion as a Keplerian, weighting over timestep:
       count[i] += 1
-      tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
+#      tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
+      tt[i,count[i]]=t+findtransit2!(1,i,h,gi,gsave[i],m,xprior,vprior,spred,ssave)
     end
     gsave[i] = gi
   end
@@ -172,6 +173,45 @@ function driftij!(x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::F
 for k=1:NDIM
   x[k,i] += h*v[k,i]
   x[k,j] += h*v[k,j]
+end
+return
+end
+
+# Carries out a Kepler step for bodies i & j
+function keplerij!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64)
+# The state vector has: 1 time; 2-4 position; 5-7 velocity; 8 r0; 9 dr0dt; 10 beta; 11 s; 12 ds
+# Initial state:
+state0 = zeros(Float64,12)
+# Final state (after a step):
+state = zeros(Float64,12)
+delx = zeros(Float64,NDIM)
+delv = zeros(Float64,NDIM)
+for k=1:NDIM
+  state0[1+k     ] = x[k,i] - x[k,j]
+  state0[1+k+NDIM] = v[k,i] - v[k,j]
+end
+gm = GNEWT*(m[i]+m[j])
+if gm == 0
+  for k=1:NDIM
+    x[k,i] += h*v[k,i]
+    x[k,j] += h*v[k,j]
+  end
+else
+  # predicted value of s
+  state0[11]=0.0
+  kepler_step!(gm, h, state0, state)
+  for k=1:NDIM
+    delx[k] = state[1+k] - state0[1+k]
+    delv[k] = state[1+NDIM+k] - state0[1+NDIM+k]
+  end
+# Advance center of mass:
+# Compute COM coords:
+  mijinv =1.0/(m[i] + m[j])
+  vcm = zeros(Float64,NDIM)
+  for k=1:NDIM
+    vcm[k] = (m[i]*v[k,i] + m[j]*v[k,j])*mijinv
+  end
+  centerm!(m,mijinv,x,v,vcm,delx,delv,i,j,h)
 end
 return
 end
@@ -516,6 +556,31 @@ return
 end
 
 # Carries out the DH17 mapping
+function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64)
+alpha = 0.25
+# alpha = 0. is similar in precision to alpha=0.25
+phisalpha!(x,v,h,m,alpha,n)
+drift!(x,v,h/2,n)
+for i=1:n-1
+  for j=i+1:n
+    driftij!(x,v,i,j,-h/2)
+    keplerij!(m,x,v,i,j,h/2)
+  end
+end
+phisalpha!(x,v,h,m,2.*(1.-alpha),n)
+#phisalpha!(x,v,h,m,2.,n)
+for i=n-1:-1:1
+  for j=n:-1:i+1
+    keplerij!(m,x,v,i,j,h/2)
+    driftij!(x,v,i,j,-h/2)
+  end
+end
+drift!(x,v,h/2,n)
+phisalpha!(x,v,h,m,alpha,n)
+return
+end
+
+# Carries out the DH17 mapping
 function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,spred::Array{Float64,2},ssave::Array{Float64,3})
 alpha = 0.25
 # alpha = 0. is similar in precision to alpha=0.25
@@ -700,6 +765,49 @@ end
 # positions & masses of the planet/star:
 
 
+# Note: this is the time elapsed *after* the beginning of the timestep:
+return tt
+end
+
+function findtransit2!(i,j,h,g1,g2,m,x1,v1,spred,ssave)
+# Computes the transit time, approximating the motion as a fraction of a DH17 step forward in time.
+# Initial guess using linear interpolation:
+tt = -g1*h/(g2-g1)
+dt = 1.0
+iter = 0
+r3 = 0.0
+gdot = 0.0
+x = copy(x1)
+v = copy(v1)
+while abs(dt) > 1e-8 && iter < 20
+  x = copy(x1)
+  v = copy(v1)
+  # Advance planet state at start of step to estimated transit time:
+  dh17!(x,v,tt,m,n)
+  # Compute time offset:
+  gsky = g!(i,j,x,v)
+  # Compute gravitational acceleration in sky plane dotted with sky position:
+  gdot = 0.
+  for k=1:n
+    if k != i
+      r3 = sqrt((x[1,k]-x[1,i])^2+(x[2,k]-x[2,i])^2 +(x[3,k]-x[3,i])^2)^3
+      gdot += GNEWT*m[k]*((x[1,k]-x[1,i])*(x[1,j]-x[1,i])+(x[2,k]-x[2,i])*(x[2,j]-x[2,i]))/r3
+    end
+    if k != j
+      r3 = sqrt((x[1,k]-x[1,j])^2+(x[2,k]-x[2,j])^2 +(x[3,k]-x[3,j])^2)^3
+      gdot -= GNEWT*m[k]*((x[1,k]-x[1,j])*(x[1,j]-x[1,i])+(x[2,k]-x[2,j])*(x[2,j]-x[2,i]))/r3
+    end
+  end
+  # Compute derivative of g with respect to time:
+  gdot += (v[1,j]-v[1,i])^2+(v[2,j]-v[2,i])^2
+  # Refine estimate of transit time with Newton's method:
+  dt = -gsky/gdot
+  # Add refinement to estimated time:
+  tt += dt
+  iter +=1
+end
+# Compute derivatives:
+#  dh17!(x,v,tt,m,n,jac_step)
 # Note: this is the time elapsed *after* the beginning of the timestep:
 return tt
 end
