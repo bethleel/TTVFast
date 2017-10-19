@@ -57,6 +57,8 @@ jac_step = zeros(Float64,7,n,7,n)
 # between the planets and star:
 gsave = zeros(Float64,n)
 # Loop over time steps:
+dt::Float64 = 0.0
+gi = 0.0
 while t < t0+tmax
   # Increment time by the time step:
   t += h
@@ -78,7 +80,9 @@ while t < t0+tmax
       # Approximate the planet-star motion as a Keplerian, weighting over timestep:
       count[i] += 1
 #      tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
-      tt[i,count[i]]=t+findtransit2!(1,i,h,gi,gsave[i],m,xprior,vprior)
+      dt = -gsave[i]*h/(gi-gsave[i])
+      dt = findtransit2!(1,i,h,dt,m,xprior,vprior)
+      tt[i,count[i]]=t+dt
     end
     gsave[i] = gi
   end
@@ -121,6 +125,8 @@ istep = 0
 # Save the g function, which computes the relative sky velocity dotted with relative position
 # between the planets and star:
 gsave = zeros(Float64,n)
+gi  = 0.0
+dt::Float64 = 0.0
 # Loop over time steps:
 while t < t0+tmax
   # Increment time by the time step:
@@ -143,7 +149,10 @@ while t < t0+tmax
       # Approximate the planet-star motion as a Keplerian, weighting over timestep:
       count[i] += 1
 #      tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
-      tt[i,count[i]]=t+findtransit2!(1,i,h,gi,gsave[i],m,xprior,vprior)
+      dt = -gsave[i]*h/(gi-gsave[i])
+      dt = findtransit2!(1,i,h,dt,m,xprior,vprior)
+      tt[i,count[i]]=t+dt
+#      tt[i,count[i]]=t+findtransit2!(1,i,h,gi,gsave[i],m,xprior,vprior)
     end
     gsave[i] = gi
   end
@@ -175,6 +184,22 @@ function driftij!(x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::F
 for k=1:NDIM
   x[k,i] += h*v[k,i]
   x[k,j] += h*v[k,j]
+end
+return
+end
+
+# Drifts bodies i & j
+function driftij!(x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64,jac_step::Array{Float64,4})
+for k=1:NDIM
+  x[k,i] += h*v[k,i]
+  x[k,j] += h*v[k,j]
+  # Now for Jacobian:
+  for l=1:NDIM
+    jac_step[k,i,  l,i] += h*jac_step[3+k,i,  l,i]
+    jac_step[k,i,3+l,i] += h*jac_step[3+k,i,3+l,i]
+    jac_step[k,j,  l,j] += h*jac_step[3+k,j,  l,j]
+    jac_step[k,j,3+l,j] += h*jac_step[3+k,j,3+l,j]
+  end    
 end
 return
 end
@@ -259,7 +284,7 @@ return
 end
 
 # Carries out a Kepler step for bodies i & j
-function keplerij!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64,spred::Array{Float64,2},jac_ij::Array{Float64,2})
+function keplerij!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64,jac_ij::Array{Float64,2})
 # The state vector has: 1 time; 2-4 position; 5-7 velocity; 8 r0; 9 dr0dt; 10 beta; 11 s; 12 ds
 # Initial state:
 state0 = zeros(Float64,12)
@@ -357,6 +382,22 @@ for i=1:n
     x[j,i] += h*v[j,i]
   end
 end
+return
+end
+
+# Drifts all particles:
+function drift!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,n::Int64,jac_step::Array{Float64,4})
+for i=1:n
+  for j=1:NDIM
+    x[j,i] += h*v[j,i]
+    # Now for Jacobian:
+    for k=1:NDIM
+      jac_step[j,i,  k,i] += h*jac_step[3+j,i,  k,i]
+      jac_step[j,i,3+k,i] += h*jac_step[3+j,i,3+k,i]
+    end    
+  end
+end
+# Now Jacobian:
 return
 end
 
@@ -630,36 +671,70 @@ g = (x[1,j]-x[1,i])*(v[1,j]-v[1,i])+(x[2,j]-x[2,i])*(v[2,j]-v[2,i])
 return g
 end
 
-# Carries out the DH17 mapping
-function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,spred::Array{Float64,2},ssave::Array{Float64,3},jac_step::Array{Float64,4})
+function jac_multiplyij!(jac_full::Array{Float64,4},jac_ij::Array{Float64,2},i::Int64,j::Int64,nbody::Int64)
+# Multiplies the Jacobians for just the i & j components:
+jac_tmp = copy(jac_full)
+# Set i & j to zero so we can multiply these components:
+for p=1:7, k=1:7, q=1:nbody
+  jac_full[p,i,k,q] = 0.0
+  jac_full[p,j,k,q] = 0.0
+end
+# multiply jacobian for planets i & j:
+for p=1:7, k=1:7, q=1:nbody, m=1:7
+  jac_full[p,i,k,q] += jac_ij[  p,  m]*jac_tmp[m,i,k,q]
+  jac_full[p,i,k,q] += jac_ij[  p,7+m]*jac_tmp[m,j,k,q]
+  jac_full[p,j,k,q] += jac_ij[7+p,  m]*jac_tmp[m,i,k,q]
+  jac_full[p,j,k,q] += jac_ij[7+p,7+m]*jac_tmp[m,j,k,q]
+end
+return
+end
+
+function jac_multiply!(jac_full::Array{Float64,4},jac_step::Array{Float64,4},nbody::Int64)
+# Multiplies the Jacobians
+jac_tmp = copy(jac_full)
+fill!(jac_full,0.0)
+# multiply jacobian
+for j=1:nbody, i=1:7, l=1:nbody, k=1:7, n=1:nbody, m=1:7
+  jac_full[i,j,k,l] += jac_step[i,j,m,n]*jac_tmp[m,n,k,l]
+end
+return
+end
+
+# Carries out the DH17 mapping & computes the jacobian:
+function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,jac_step::Array{Float64,4})
 h2 = 0.5*h
 alpha = alpha0
+jac_phi = zeros(Float64,7,n,7,n)
 # alpha = 0. is similar in precision to alpha=0.25
 if alpha != 0.0
-  phisalpha!(x,v,h,m,alpha,n,jac_step)
+  phisalpha!(x,v,h,m,alpha,n,jac_phi)
+  jac_multiply!(jac_step,jac_phi,n)
 end
-drift!(x,v,h2,n)
+drift!(x,v,h2,n,jac_step)
+jac_ij = zeros(Float64,14,14)
 for i=1:n-1
   for j=i+1:n
-    driftij!(x,v,i,j,-h2)
-    keplerij!(m,x,v,i,j,h2,spred)
+    driftij!(x,v,i,j,-h2,jac_step)
+    keplerij!(m,x,v,i,j,h2,jac_ij)
+    jac_multiplyij!(jac_step,jac_ij,i,j,n)
   end
 end
-extrapolate_s!(n,spred,ssave)
 if alpha != 1.0
-  phisalpha!(x,v,h,m,2.*(1.-alpha),n,jac_step)
+  phisalpha!(x,v,h,m,2.*(1.-alpha),n,jac_phi)
+  jac_multiply!(jac_step,jac_phi,n)
 end
 #phisalpha!(x,v,h,m,2.,n)
 for i=n-1:-1:1
   for j=n:-1:i+1
-    keplerij!(m,x,v,i,j,h2,spred)
-    driftij!(x,v,i,j,-h2)
+    keplerij!(m,x,v,i,j,h2,jac_ij)
+    jac_multiplyij!(jac_step,jac_ij,i,j,n)
+    driftij!(x,v,i,j,-h2,jac_step)
   end
 end
-extrapolate_s!(n,spred,ssave)
-drift!(x,v,h2,n)
+drift!(x,v,h2,n,jac_step)
 if alpha != 0.0
-  phisalpha!(x,v,h,m,alpha,n,jac_step)
+  phisalpha!(x,v,h,m,alpha,n,jac_phi)
+  jac_multiply!(jac_step,jac_phi,n)
 end
 return
 end
@@ -792,10 +867,9 @@ end
 return tt
 end
 
-function findtransit2!(i::Int64,j::Int64,h::Float64,g1::Float64,g2::Float64,m::Array{Float64,1},x1::Array{Float64,2},v1::Array{Float64,2})
+function findtransit2!(i::Int64,j::Int64,h::Float64,tt::Float64,m::Array{Float64,1},x1::Array{Float64,2},v1::Array{Float64,2})
 # Computes the transit time, approximating the motion as a fraction of a DH17 step forward in time.
 # Initial guess using linear interpolation:
-tt = -g1*h/(g2-g1)
 dt = 1.0
 iter = 0
 r3 = 0.0
@@ -832,5 +906,5 @@ end
 # Compute derivatives:
 #  dh17!(x,v,tt,m,n,jac_step)
 # Note: this is the time elapsed *after* the beginning of the timestep:
-return tt
+return tt::Float64
 end

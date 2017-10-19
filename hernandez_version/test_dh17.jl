@@ -1,9 +1,8 @@
-# Tests the routine phisalpha jacobian:
+# Tests the routine dh17 jacobian:
 
 include("ttv.jl")
 
-#function phisalpha!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},alpha::Float64,n::Int64,jac_step::Array{Float64,4})
-#function phisalpha!(x,v,h,m,alpha,n,jac_step)
+#function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,jac_step::Array{Float64,4})
 
 
 # Next, try computing three-body Keplerian Jacobian:
@@ -23,11 +22,15 @@ x0=zeros(3,n)
 v0=zeros(3,n)
 alpha = 0.25
 
-ssave = zeros(Float64,n,n,2)
 # Predict values of s:
-spred = zeros(Float64,n,n)
 
 jac_step = zeros(7,n,7,n)
+# Initialize with identity matrix:
+for i=1:7
+  for j=1:n
+    jac_step[i,j,i,j] = 1.0
+  end
+end
 
 for k=1:n
   m[k] = elements[k,1]
@@ -53,7 +56,7 @@ x = copy(x0)
 v = copy(v0)
 m = copy(m0)
 # Compute jacobian exactly:
-phisalpha!(x,v,h,m,alpha,n,jac_step)
+dh17!(x,v,h,m,n,jac_step)
 # Save these so that I can compute derivatives numerically:
 xsave = copy(x)
 vsave = copy(v)
@@ -76,7 +79,7 @@ for j=1:n
       dq = dlnq
       x[jj,j] = dq
     end
-    phisalpha!(x,v,h,m,alpha,n)
+    dh17!(x,v,h,m,n)
   # Now x & v are final positions & velocities after time step
     for i=1:n
       for k=1:3
@@ -94,7 +97,7 @@ for j=1:n
       dq = dlnq
       v[jj,j] = dq
     end
-    phisalpha!(x,v,h,m,alpha,n)
+    dh17!(x,v,h,m,n)
     for i=1:n
       for k=1:3
         jac_step_num[  k,i,3+jj,j] = (x[k,i]-xsave[k,i])/dq
@@ -108,7 +111,7 @@ for j=1:n
   m=copy(m0)
   dq = m[j]*dlnq
   m[j] += dq
-  phisalpha!(x,v,h,m,alpha,n)
+  dh17!(x,v,h,m,n)
   for i=1:n
     for k=1:3
       jac_step_num[  k,i,7,j] = (x[k,i]-xsave[k,i])/dq
