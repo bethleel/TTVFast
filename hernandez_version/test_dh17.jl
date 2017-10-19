@@ -9,7 +9,8 @@ include("ttv.jl")
 
 n = 3
 t0 = 7257.93115525
-h  = 0.05
+#h  = 0.05
+h  = 10.0
 tmax = 600.0
 dlnq = 1e-4
 
@@ -20,7 +21,6 @@ elements[3,1] = 1.0
 m =zeros(n)
 x0=zeros(3,n)
 v0=zeros(3,n)
-alpha = 0.25
 
 # Predict values of s:
 

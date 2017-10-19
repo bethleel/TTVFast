@@ -189,16 +189,16 @@ return
 end
 
 # Drifts bodies i & j
-function driftij!(x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64,jac_step::Array{Float64,4})
+function driftij!(x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64,jac_step::Array{Float64,4},nbody::Int64)
 for k=1:NDIM
   x[k,i] += h*v[k,i]
   x[k,j] += h*v[k,j]
   # Now for Jacobian:
-  for l=1:NDIM
-    jac_step[k,i,  l,i] += h*jac_step[3+k,i,  l,i]
-    jac_step[k,i,3+l,i] += h*jac_step[3+k,i,3+l,i]
-    jac_step[k,j,  l,j] += h*jac_step[3+k,j,  l,j]
-    jac_step[k,j,3+l,j] += h*jac_step[3+k,j,3+l,j]
+  for l=1:7
+    for m=1:nbody
+      jac_step[k,i,  l,m] += h*jac_step[3+k,i,  l,m]
+      jac_step[k,j,  l,m] += h*jac_step[3+k,j,  l,m]
+    end
   end    
 end
 return
@@ -391,13 +391,13 @@ for i=1:n
   for j=1:NDIM
     x[j,i] += h*v[j,i]
     # Now for Jacobian:
-    for k=1:NDIM
-      jac_step[j,i,  k,i] += h*jac_step[3+j,i,  k,i]
-      jac_step[j,i,3+k,i] += h*jac_step[3+j,i,3+k,i]
+    for k=1:7
+      for m=1:n
+        jac_step[j,i,k,m] += h*jac_step[3+j,i,k,m]
+      end    
     end    
   end
 end
-# Now Jacobian:
 return
 end
 
@@ -606,24 +606,23 @@ h2 = 0.5*h
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n)
 end
-drift!(x,v,h2,n)
+#drift!(x,v,h2,n)
 for i=1:n-1
   for j=i+1:n
-    driftij!(x,v,i,j,-h2)
+#    driftij!(x,v,i,j,-h2)
     keplerij!(m,x,v,i,j,h2)
   end
 end
-if alpha != 1.0
-  phisalpha!(x,v,h,m,2.*(1.-alpha),n)
-end
-#phisalpha!(x,v,h,m,2.,n)
+#if alpha != 1.0
+#  phisalpha!(x,v,h,m,2.*(1.-alpha),n)
+#end
 for i=n-1:-1:1
   for j=n:-1:i+1
     keplerij!(m,x,v,i,j,h2)
-    driftij!(x,v,i,j,-h2)
+#    driftij!(x,v,i,j,-h2)
   end
 end
-drift!(x,v,h2,n)
+#drift!(x,v,h2,n)
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n)
 end
@@ -710,28 +709,27 @@ if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n,jac_phi)
   jac_multiply!(jac_step,jac_phi,n)
 end
-drift!(x,v,h2,n,jac_step)
+#drift!(x,v,h2,n,jac_step)
 jac_ij = zeros(Float64,14,14)
 for i=1:n-1
   for j=i+1:n
-    driftij!(x,v,i,j,-h2,jac_step)
+#    driftij!(x,v,i,j,-h2,jac_step,n)
     keplerij!(m,x,v,i,j,h2,jac_ij)
     jac_multiplyij!(jac_step,jac_ij,i,j,n)
   end
 end
-if alpha != 1.0
-  phisalpha!(x,v,h,m,2.*(1.-alpha),n,jac_phi)
-  jac_multiply!(jac_step,jac_phi,n)
-end
-#phisalpha!(x,v,h,m,2.,n)
+#if alpha != 1.0
+#  phisalpha!(x,v,h,m,2.*(1.-alpha),n,jac_phi)
+#  jac_multiply!(jac_step,jac_phi,n)
+#end
 for i=n-1:-1:1
   for j=n:-1:i+1
     keplerij!(m,x,v,i,j,h2,jac_ij)
     jac_multiplyij!(jac_step,jac_ij,i,j,n)
-    driftij!(x,v,i,j,-h2,jac_step)
+#    driftij!(x,v,i,j,-h2,jac_step,n)
   end
 end
-drift!(x,v,h2,n,jac_step)
+#drift!(x,v,h2,n,jac_step)
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n,jac_phi)
   jac_multiply!(jac_step,jac_phi,n)

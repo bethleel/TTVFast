@@ -278,3 +278,7 @@ a step.  This has the advantage that it will work for any hierarchical configura
 It also has the advantage that it gives higher precision for the transit times, and
 makes the derivative computation slightly simpler.  It has the disadvantage that it
 takes longer to run, but only by ~30-50%.
+
+10/19/2017
+
+Need to test the hyperbolic

@@ -154,10 +154,9 @@ jac_ij = zeros(14,14)
 i=1 ; j=2
 x = copy(x0) ; v=copy(v0)
 # Predict values of s:
-spred = zeros(n,n)
-keplerij!(m,x,v,i,j,20.*h,spred,jac_ij)
+keplerij!(m,x,v,i,j,20.*h,jac_ij)
 x0 = copy(x) ; v0 = copy(v)
-keplerij!(m,x,v,i,j,h,spred,jac_ij)
+keplerij!(m,x,v,i,j,h,jac_ij)
 
 # xtest = copy(x0) ; vtest=copy(v0)
 # keplerij!(m,xtest,vtest,i,j,h,jac_ij)
@@ -181,7 +180,7 @@ for jj=1:3
     dq = dlnq
     x[jj,i] = dq
   end
-  keplerij!(m,x,v,i,j,h,spred)
+  keplerij!(m,x,v,i,j,h)
   # Now x & v are final positions & velocities after time step
   for k=1:3
     jac_ij_num[   k,  jj] = (x[k,i]-xsave[k,i])/dq
@@ -199,7 +198,7 @@ for jj=1:3
     dq = dlnq
     v[jj,i] = dq
   end
-  keplerij!(m,x,v,i,j,h,spred)
+  keplerij!(m,x,v,i,j,h)
   for k=1:3
     jac_ij_num[   k,3+jj] = (x[k,i]-xsave[k,i])/dq
     jac_ij_num[ 3+k,3+jj] = (v[k,i]-vsave[k,i])/dq
@@ -213,7 +212,7 @@ v=copy(v0)
 m=copy(msave)
 dq = m[i]*dlnq
 m[i] += dq
-keplerij!(m,x,v,i,j,h,spred)
+keplerij!(m,x,v,i,j,h)
 for k=1:3
   jac_ij_num[   k,7] = (x[k,i]-xsave[k,i])/dq
   if k == 2
@@ -226,6 +225,8 @@ for k=1:3
   end
   jac_ij_num[10+k,7] = (v[k,j]-vsave[k,j])/dq
 end
+# The mass doesn't change:
+jac_ij_num[7,7] =  1.0
 for jj=1:3
   # Now vary parameters of outer planet:
   x = copy(x0)
@@ -238,7 +239,7 @@ for jj=1:3
     dq = dlnq
     x[jj,j] = dq
   end
-  keplerij!(m,x,v,i,j,h,spred)
+  keplerij!(m,x,v,i,j,h)
   for k=1:3
     jac_ij_num[   k,7+jj] = (x[k,i]-xsave[k,i])/dq
     jac_ij_num[ 3+k,7+jj] = (v[k,i]-vsave[k,i])/dq
@@ -255,7 +256,7 @@ for jj=1:3
     dq = dlnq
     v[jj,j] = dq
   end
-  keplerij!(m,x,v,i,j,h,spred)
+  keplerij!(m,x,v,i,j,h)
   for k=1:3
     jac_ij_num[   k,10+jj] = (x[k,i]-xsave[k,i])/dq
     jac_ij_num[ 3+k,10+jj] = (v[k,i]-vsave[k,i])/dq
@@ -269,7 +270,7 @@ v = copy(v0)
 m = copy(msave)
 dq = m[j]*dlnq
 m[j] += dq
-keplerij!(m,x,v,i,j,h,spred)
+keplerij!(m,x,v,i,j,h)
 for k=1:3
   jac_ij_num[   k,14] = (x[k,i]-xsave[k,i])/dq
   if k == 2
@@ -282,6 +283,8 @@ for k=1:3
   end
   jac_ij_num[10+k,14] = (v[k,j]-vsave[k,j])/dq
 end
+# The mass doesn't change:
+jac_ij_num[14,14] =  1.0
 
 println(jac_ij)
 println(jac_ij_num)
