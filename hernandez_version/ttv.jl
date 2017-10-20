@@ -27,17 +27,16 @@ end
 return
 end
 
-function ttv!(n::Int64,t0::Float64,h::Float64,tmax::Float64,elements::Array{Float64,2},tt::Array{Float64,2},count::Array{Int64,1},jacobian::Array{Float64,2})
+function ttv!(n::Int64,t0::Float64,h::Float64,tmax::Float64,elements::Array{Float64,2},tt::Array{Float64,2},count::Array{Int64,1},dtdq0::Array{Float64,4})
 #fcons = open("fcons.txt","w");
 m=zeros(Float64,n)
 x=zeros(Float64,NDIM,n)
 v=zeros(Float64,NDIM,n)
 # Save the "s" factors to extrapolate for future steps:
-ssave = zeros(Float64,n,n,2)
 # Predict values of s:
-spred = zeros(Float64,n,n)
-# Fill the transit-timing array with zeros:
+# Fill the transit-timing & jacobian arrays with zeros:
 fill!(tt,0.0)
+fill!(dtdq0,0.0)
 # Counter for transits of each planet:
 fill!(count,0)
 for i=1:n
@@ -51,8 +50,15 @@ vprior = copy(v)
 t = t0
 # Set step counter to zero:
 istep = 0
-# Jacobian for each step (7 elements+mass, n_planets, 7 elements+mass, n planets):
+# Jacobian for each step (7- 6 elements+mass, n_planets, 7 - 6 elements+mass, n planets):
 jac_step = zeros(Float64,7,n,7,n)
+jac_prior = zeros(Float64,7,n,7,n)
+dtdq = zeros(7,n)
+# Initialize to identity matrix:
+for i=1:7, j=1:n
+  jac_step[i,j,i,j] = 1.0
+end
+
 # Save the g function, which computes the relative sky velocity dotted with relative position
 # between the planets and star:
 gsave = zeros(Float64,n)
@@ -66,10 +72,10 @@ while t < t0+tmax
   istep +=1
   # Carry out a phi^2 mapping step:
 #  phi2!(x,v,h,m,n)
-  dh17!(x,v,h,m,n,spred,ssave,jac_step)
-#  extrapolate_s!(n,spred,ssave)
+  dh17!(x,v,h,m,n,jac_step)
   # Check to see if a transit may have occured.  Sky is x-y plane; line of sight is z.
-  # Star is body 1; planets are 2-nbody:
+  # Star is body 1; planets are 2-nbody (note that this could be modified to see if
+  # any body transits another body):
   for i=2:n
     # Compute the relative sky velocity dotted with position:
     gi = g!(i,1,x,v)
@@ -81,18 +87,23 @@ while t < t0+tmax
       count[i] += 1
 #      tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
       dt = -gsave[i]*h/(gi-gsave[i])
-      dt = findtransit2!(1,i,h,dt,m,xprior,vprior)
+#      dt = findtransit2!(1,i,h,dt,m,xprior,vprior)
+      xtransit = copy(xprior)
+      vtransit = copy(vprior)
+      jac_transit = copy(jac_prior)
+      dt = findtransit2!(1,i,h,dt,m,xtransit,vtransit,jac_transit,dtdq)
       tt[i,count[i]]=t+dt
+      # Compute Jacobian with respect to initial cartesian coordinates:
+      for k=1:7, p=1:n, l=1:7, q=1:n
+        dtdq0[i,count[i],k,p] += dtdq[l,q]*jac_prior[l,q,k,p]
+      end
     end
     gsave[i] = gi
   end
   # Save the current state as prior state:
-  for i=1:NDIM
-    for j=1:n
-      xprior[i,j]=x[i,j]
-      vprior[i,j]=v[i,j]
-    end
-  end
+  xprior = copy(x)
+  vprior = copy(v)
+  jac_prior = copy(jac_step)
 end
 return 
 end
@@ -103,9 +114,7 @@ m=zeros(Float64,n)
 x=zeros(Float64,NDIM,n)
 v=zeros(Float64,NDIM,n)
 # Save the "s" factors to extrapolate for future steps:
-ssave = zeros(Float64,n,n,2)
 # Predict values of s:
-spred = zeros(Float64,n,n)
 # Fill the transit-timing array with zeros:
 fill!(tt,0.0)
 # Counter for transits of each planet:
@@ -135,8 +144,7 @@ while t < t0+tmax
   istep +=1
   # Carry out a phi^2 mapping step:
 #  phi2!(x,v,h,m,n)
-  dh17!(x,v,h,m,n,spred,ssave)
-#  extrapolate_s!(n,spred,ssave)
+  dh17!(x,v,h,m,n)
   # Check to see if a transit may have occured.  Sky is x-y plane; line of sight is z.
   # Star is body 1; planets are 2-nbody:
   for i=2:n
@@ -150,7 +158,9 @@ while t < t0+tmax
       count[i] += 1
 #      tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
       dt = -gsave[i]*h/(gi-gsave[i])
-      dt = findtransit2!(1,i,h,dt,m,xprior,vprior)
+      xtransit = copy(xprior)
+      vtransit = copy(vprior)
+      dt = findtransit2!(1,i,h,dt,m,xtransit,vtransit)
       tt[i,count[i]]=t+dt
 #      tt[i,count[i]]=t+findtransit2!(1,i,h,gi,gsave[i],m,xprior,vprior)
     end
@@ -232,46 +242,6 @@ else
     delx[k] = state[1+k] - state0[1+k]
     delv[k] = state[1+NDIM+k] - state0[1+NDIM+k]
   end
-# Advance center of mass:
-# Compute COM coords:
-  mijinv =1.0/(m[i] + m[j])
-  vcm = zeros(Float64,NDIM)
-  for k=1:NDIM
-    vcm[k] = (m[i]*v[k,i] + m[j]*v[k,j])*mijinv
-  end
-  centerm!(m,mijinv,x,v,vcm,delx,delv,i,j,h)
-end
-return
-end
-
-# Carries out a Kepler step for bodies i & j
-function keplerij!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64,spred::Array{Float64,2})
-# The state vector has: 1 time; 2-4 position; 5-7 velocity; 8 r0; 9 dr0dt; 10 beta; 11 s; 12 ds
-# Initial state:
-state0 = zeros(Float64,12)
-# Final state (after a step):
-state = zeros(Float64,12)
-delx = zeros(Float64,NDIM)
-delv = zeros(Float64,NDIM)
-for k=1:NDIM
-  state0[1+k     ] = x[k,i] - x[k,j]
-  state0[1+k+NDIM] = v[k,i] - v[k,j]
-end
-gm = GNEWT*(m[i]+m[j])
-if gm == 0
-  for k=1:NDIM
-    x[k,i] += h*v[k,i]
-    x[k,j] += h*v[k,j]
-  end
-else
-  # predicted value of s
-  state0[11]=spred[i,j]
-  kepler_step!(gm, h, state0, state)
-  for k=1:NDIM
-    delx[k] = state[1+k] - state0[1+k]
-    delv[k] = state[1+NDIM+k] - state0[1+NDIM+k]
-  end
-  spred[i,j]=state[11]
 # Advance center of mass:
 # Compute COM coords:
   mijinv =1.0/(m[i] + m[j])
@@ -631,39 +601,6 @@ end
 return
 end
 
-# Carries out the DH17 mapping
-function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,spred::Array{Float64,2},ssave::Array{Float64,3})
-alpha = alpha0
-h2 = 0.5*h
-# alpha = 0. is similar in precision to alpha=0.25
-if alpha != 0.0
-  phisalpha!(x,v,h,m,alpha,n)
-end
-drift!(x,v,h2,n)
-for i=1:n-1
-  for j=i+1:n
-    driftij!(x,v,i,j,-h2)
-    keplerij!(m,x,v,i,j,h2,spred)
-  end
-end
-extrapolate_s!(n,spred,ssave)
-if alpha != 1.0
-  phisalpha!(x,v,h,m,2.*(1.-alpha),n)
-end
-for i=n-1:-1:1
-  for j=n:-1:i+1
-    keplerij!(m,x,v,i,j,h2,spred)
-    driftij!(x,v,i,j,-h2)
-  end
-end
-extrapolate_s!(n,spred,ssave)
-drift!(x,v,h2,n)
-if alpha != 0.0
-  phisalpha!(x,v,h,m,alpha,n)
-end
-return
-end
-
 # Used in computing the transit time:
 function g!(i::Int64,j::Int64,x::Array{Float64,2},v::Array{Float64,2})
 # See equation 8-10 Fabrycky (2008) in Seager Exoplanets book
@@ -906,6 +843,75 @@ while abs(dt) > 1e-8 && iter < 20
 end
 # Compute derivatives:
 #  dh17!(x,v,tt,m,n,jac_step)
+# Note: this is the time elapsed *after* the beginning of the timestep:
+return tt::Float64
+end
+
+function findtransit2!(i::Int64,j::Int64,h::Float64,tt::Float64,m::Array{Float64,1},x1::Array{Float64,2},v1::Array{Float64,2},jac_step::Array{Float64,4},dtdq::Array{Float64,2})
+# Computes the transit time, approximating the motion as a fraction of a DH17 step forward in time.
+# Also computes the Jacobian of the transit time with respect to the initial parameters, dtdq[7,n].
+# Initial guess using linear interpolation:
+dt = 1.0
+iter = 0
+r3 = 0.0
+gdot = 0.0
+x = copy(x1)
+v = copy(v1)
+while abs(dt) > 1e-8 && iter < 20
+  x = copy(x1)
+  v = copy(v1)
+  # Advance planet state at start of step to estimated transit time:
+  dh17!(x,v,tt,m,n)
+  # Compute time offset:
+  gsky = g!(i,j,x,v)
+  # Compute gravitational acceleration in sky plane dotted with sky position:
+  gdot = 0.0
+  for k=1:n
+    if k != i
+      r3 = sqrt((x[1,k]-x[1,i])^2+(x[2,k]-x[2,i])^2 +(x[3,k]-x[3,i])^2)^3
+      gdot += GNEWT*m[k]*((x[1,k]-x[1,i])*(x[1,j]-x[1,i])+(x[2,k]-x[2,i])*(x[2,j]-x[2,i]))/r3
+    end
+    if k != j
+      r3 = sqrt((x[1,k]-x[1,j])^2+(x[2,k]-x[2,j])^2 +(x[3,k]-x[3,j])^2)^3
+      gdot -= GNEWT*m[k]*((x[1,k]-x[1,j])*(x[1,j]-x[1,i])+(x[2,k]-x[2,j])*(x[2,j]-x[2,i]))/r3
+    end
+  end
+  # Compute derivative of g with respect to time:
+  gdot += (v[1,j]-v[1,i])^2+(v[2,j]-v[2,i])^2
+  # Refine estimate of transit time with Newton's method:
+  dt = -gsky/gdot
+  # Add refinement to estimated time:
+  tt += dt
+  iter +=1
+end
+# Compute time derivatives:
+x = copy(x1)
+v = copy(v1)
+# Compute dgdt with the updated time step.
+dh17!(x,v,tt,m,n,jac_step)
+# Compute time offset:
+gsky = g!(i,j,x,v)
+# Compute gravitational acceleration in sky plane dotted with sky position:
+gdot = 0.0
+for k=1:n
+  if k != i
+    r3 = sqrt((x[1,k]-x[1,i])^2+(x[2,k]-x[2,i])^2 +(x[3,k]-x[3,i])^2)^3
+    gdot += GNEWT*m[k]*((x[1,k]-x[1,i])*(x[1,j]-x[1,i])+(x[2,k]-x[2,i])*(x[2,j]-x[2,i]))/r3
+  end
+  if k != j
+    r3 = sqrt((x[1,k]-x[1,j])^2+(x[2,k]-x[2,j])^2 +(x[3,k]-x[3,j])^2)^3
+    gdot -= GNEWT*m[k]*((x[1,k]-x[1,j])*(x[1,j]-x[1,i])+(x[2,k]-x[2,j])*(x[2,j]-x[2,i]))/r3
+  end
+end
+# Compute derivative of g with respect to time:
+gdot += (v[1,j]-v[1,i])^2+(v[2,j]-v[2,i])^2
+for k=1:7
+  for p=1:n
+    # Compute derivatives:
+    dtdq[k,p] = -((jac_step[1,j,k,p]-jac_step[1,i,k,p])*(v[1,j]-v[1,i])+(jac_step[2,j,k,p]-jac_step[2,i,k,p])*(v[2,j]-v[2,i])+
+                  (jac_step[4,j,k,p]-jac_step[1,i,k,p])*(x[1,j]-x[1,i])+(jac_step[5,j,k,p]-jac_step[5,i,k,p])*(x[2,j]-x[2,i]))/gdot
+  end
+end
 # Note: this is the time elapsed *after* the beginning of the timestep:
 return tt::Float64
 end

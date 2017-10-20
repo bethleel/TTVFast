@@ -310,4 +310,4 @@ Next steps:
 3).  Write initial condition derivative, and test. [ ]
 4).  Profile code & see if there are ways to speed it up. [ ]
 
-
+Implemented transit-time derivatives;  now need to test if this works.

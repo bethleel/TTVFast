@@ -13,9 +13,9 @@ t0 = 7257.93115525
 #h  = 0.05
 h  = 0.15
 tmax = 600.0
-dlnq = 1e-6
+dlnq = 1e-8
 
-nstep = 10
+nstep = 100
 
 elements = readdlm("elements.txt",',')
 elements[2,1] = 1.0
