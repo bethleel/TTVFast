@@ -290,6 +290,8 @@ is different about these. [x]
 Hmmm.... it works when there are only two bodies.  Somehow the third body
 is affecting the solution when we only advance the first two.... weird.
 
+10/20/2017
+
 Okay, I think I know what is going on:  the jacobian for the keplerij! routine
 is not computed properly when the center-of-mass is non-zero.  I tried putting
 in 3 bodies for test_elliptic_derivative.jl, and found that this gave errors as
@@ -300,3 +302,12 @@ include the final center-of-mass position.
 
 Once I added that, keplerij works with 3 bodies!  Then, I added back in the
 other steps of dh17, and now test_dh17.jl gives good results!
+
+Next steps:
+
+1).  Concatenate multiple steps, and test these. [x]
+2).  Write transit time derivative, and test. [ ]
+3).  Write initial condition derivative, and test. [ ]
+4).  Profile code & see if there are ways to speed it up. [ ]
+
+

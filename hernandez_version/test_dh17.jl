@@ -13,7 +13,9 @@ t0 = 7257.93115525
 #h  = 0.05
 h  = 0.15
 tmax = 600.0
-dlnq = 1e-5
+dlnq = 1e-6
+
+nstep = 10
 
 elements = readdlm("elements.txt",',')
 elements[2,1] = 1.0
@@ -48,7 +50,7 @@ v0[2,1] = 5e-1*sqrt(v0[1,1]^2+v0[3,1]^2)
 v0[2,2] = -5e-1*sqrt(v0[1,2]^2+v0[3,2]^2)
 v0[2,3] = -5e-1*sqrt(v0[1,2]^2+v0[3,2]^2)
 
-# Take a step:
+# Take a single step (so that we aren't at initial coordinates):
 dh17!(x0,v0,h,m,n)
 
 # Now, copy these to compute Jacobian (so that I don't step
@@ -57,7 +59,9 @@ x = copy(x0)
 v = copy(v0)
 m = copy(m0)
 # Compute jacobian exactly:
-dh17!(x,v,h,m,n,jac_step)
+for istep=1:nstep
+  dh17!(x,v,h,m,n,jac_step)
+end
 # Save these so that I can compute derivatives numerically:
 xsave = copy(x)
 vsave = copy(v)
@@ -86,7 +90,9 @@ for j=1:n
       dq = dlnq
       x[jj,j] = dq
     end
-    dh17!(x,v,h,m,n)
+    for istep=1:nstep
+      dh17!(x,v,h,m,n)
+    end
   # Now x & v are final positions & velocities after time step
     for i=1:n
       for k=1:3
@@ -104,7 +110,9 @@ for j=1:n
       dq = dlnq
       v[jj,j] = dq
     end
-    dh17!(x,v,h,m,n)
+    for istep=1:nstep
+      dh17!(x,v,h,m,n)
+    end
     for i=1:n
       for k=1:3
         jac_step_num[  k,i,3+jj,j] = (x[k,i]-xsave[k,i])/dq
@@ -118,7 +126,9 @@ for j=1:n
   m=copy(m0)
   dq = m[j]*dlnq
   m[j] += dq
-  dh17!(x,v,h,m,n)
+  for istep=1:nstep
+    dh17!(x,v,h,m,n)
+  end
   for i=1:n
     for k=1:3
       jac_step_num[  k,i,7,j] = (x[k,i]-xsave[k,i])/dq
@@ -141,3 +151,17 @@ for j=1:n
     end
   end
 end
+
+jacmax = 0.0
+
+for i=1:7, j=1:3, k=1:7, l=1:3
+  if jac_step[i,j,k,l] != 0
+    diff = abs(jac_step_num[i,j,k,l]/jac_step[i,j,k,l]-1.0)
+    if diff > jacmax
+      jacmax = diff
+    end
+  end
+end
+
+println("Maximum fractional error: ",jacmax)
+
