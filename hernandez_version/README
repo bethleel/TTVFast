@@ -281,4 +281,22 @@ takes longer to run, but only by ~30-50%.
 
 10/19/2017
 
-Need to test the hyperbolic
+Need to test the hyperbolic kepler case. [x]
+
+There's a weird bug occurring:  test_dh17.jl fails for jac_step[1:3,:,7,:],
+but it doesn't fail for test_elliptic_derivative.jl.  I need to track down what
+is different about these. [x]
+
+Hmmm.... it works when there are only two bodies.  Somehow the third body
+is affecting the solution when we only advance the first two.... weird.
+
+Okay, I think I know what is going on:  the jacobian for the keplerij! routine
+is not computed properly when the center-of-mass is non-zero.  I tried putting
+in 3 bodies for test_elliptic_derivative.jl, and found that this gave errors as
+well!
+
+The problem was that xcm was the initial center-of-mass position;  I needed to
+include the final center-of-mass position.
+
+Once I added that, keplerij works with 3 bodies!  Then, I added back in the
+other steps of dh17, and now test_dh17.jl gives good results!

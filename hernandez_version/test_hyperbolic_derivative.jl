@@ -126,16 +126,15 @@ println(jac_num1./jacobian-1.)
 
 # Next, try computing two-body Keplerian Jacobian:
 
-n = 3
+n = 2
 t0 = 7257.93115525
-h  = 10.05
+h  = 0.05
 tmax = 600.0
-dlnq = 1e-8
+dlnq = 1e-5
 
 elements = readdlm("elements.txt",',')
-#elements[2,1] = 0.75
-elements[2,1] = 1.0
-elements[3,1] = 1.0
+elements[2,1] = 0.75
+#elements[1,1] = 1e-5
 
 m =zeros(n)
 x0=zeros(NDIM,n)
@@ -151,12 +150,15 @@ x0[2,1] = 5e-1*sqrt(x0[1,1]^2+x0[3,1]^2)
 x0[2,2] = -5e-1*sqrt(x0[1,2]^2+x0[3,2]^2)
 v0[2,1] = 5e-1*sqrt(v0[1,1]^2+v0[3,1]^2)
 v0[2,2] = -5e-1*sqrt(v0[1,2]^2+v0[3,2]^2)
+# Reduce the masses to make it hyperbolic:
+m *= 1e-1
+
 
 jac_ij = zeros(14,14)
 i=1 ; j=2
 x = copy(x0) ; v=copy(v0)
 # Predict values of s:
-keplerij!(m,x,v,i,j,20.*h,jac_ij)
+keplerij!(m,x,v,i,j,h,jac_ij)
 x0 = copy(x) ; v0 = copy(v)
 keplerij!(m,x,v,i,j,h,jac_ij)
 

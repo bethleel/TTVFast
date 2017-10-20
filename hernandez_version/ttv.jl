@@ -5,7 +5,7 @@
 const YEAR  = 365.242
 const GNEWT = 39.4845/YEAR^2
 const NDIM  = 3
-const KEPLER_TOL = 1e-5
+const KEPLER_TOL = 1e-8
 const third = 1./3.
 const alpha0 = 0.0
 include("kepler_step.jl")
@@ -213,6 +213,7 @@ state0 = zeros(Float64,12)
 state = zeros(Float64,12)
 delx = zeros(Float64,NDIM)
 delv = zeros(Float64,NDIM)
+#println("Masses: ",i," ",j)
 for k=1:NDIM
   state0[1+k     ] = x[k,i] - x[k,j]
   state0[1+k+NDIM] = v[k,i] - v[k,j]
@@ -315,6 +316,7 @@ xcm = zeros(Float64,NDIM)
 vcm = zeros(Float64,NDIM)
 mi = m[i]*mijinv # Normalize the masses
 mj = m[j]*mijinv
+#println("Masses: ",i," ",j)
 for k=1:NDIM
   xcm[k] = mi*x[k,i] + mj*x[k,j]
   vcm[k] = mi*v[k,i] + mj*v[k,j]
@@ -358,14 +360,14 @@ for k=1:NDIM
      jac_ij[10+k,10+l] += mi*jac_kepler[3+k,3+l]
    end
 # Compute derivatives of \delta x_i with respect to the masses:
-   jac_ij[   k, 7] += (x[k,i]+h*v[k,i]-xcm[k]-mj*state[1+k])*mijinv + GNEWT*mj*jac_kepler[  k,7]
-   jac_ij[   k,14] += (x[k,j]+h*v[k,j]-xcm[k]+mi*state[1+k])*mijinv + GNEWT*mj*jac_kepler[  k,7]
+   jac_ij[   k, 7] += (x[k,i]+h*v[k,i]-xcm[k]-h*vcm[k]-mj*state[1+k])*mijinv + GNEWT*mj*jac_kepler[  k,7]
+   jac_ij[   k,14] += (x[k,j]+h*v[k,j]-xcm[k]-h*vcm[k]+mi*state[1+k])*mijinv + GNEWT*mj*jac_kepler[  k,7]
 # Compute derivatives of \delta v_i with respect to the masses:
    jac_ij[ 3+k, 7] += (v[k,i]-vcm[k]-mj*state[4+k])*mijinv + GNEWT*mj*jac_kepler[3+k,7]
    jac_ij[ 3+k,14] += (v[k,j]-vcm[k]+mi*state[4+k])*mijinv + GNEWT*mj*jac_kepler[3+k,7]
 # Compute derivatives of \delta x_j with respect to the masses:
-   jac_ij[ 7+k, 7] += (x[k,i]+h*v[k,i]-xcm[k]-mj*state[1+k])*mijinv - GNEWT*mi*jac_kepler[  k,7]
-   jac_ij[ 7+k,14] += (x[k,j]+h*v[k,j]-xcm[k]+mi*state[1+k])*mijinv - GNEWT*mi*jac_kepler[  k,7]
+   jac_ij[ 7+k, 7] += (x[k,i]+h*v[k,i]-xcm[k]-h*vcm[k]-mj*state[1+k])*mijinv - GNEWT*mi*jac_kepler[  k,7]
+   jac_ij[ 7+k,14] += (x[k,j]+h*v[k,j]-xcm[k]-h*vcm[k]+mi*state[1+k])*mijinv - GNEWT*mi*jac_kepler[  k,7]
 # Compute derivatives of \delta v_j with respect to the masses:
    jac_ij[10+k, 7] += (v[k,i]-vcm[k]-mj*state[4+k])*mijinv - GNEWT*mi*jac_kepler[3+k,7]
    jac_ij[10+k,14] += (v[k,j]-vcm[k]+mi*state[4+k])*mijinv - GNEWT*mi*jac_kepler[3+k,7]
@@ -392,8 +394,8 @@ for i=1:n
     x[j,i] += h*v[j,i]
     # Now for Jacobian:
     for k=1:7
-      for m=1:n
-        jac_step[j,i,k,m] += h*jac_step[3+j,i,k,m]
+      for q=1:n
+        jac_step[j,i,k,q] += h*jac_step[3+j,i,k,q]
       end    
     end    
   end
@@ -606,23 +608,23 @@ h2 = 0.5*h
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n)
 end
-#drift!(x,v,h2,n)
+drift!(x,v,h2,n)
 for i=1:n-1
   for j=i+1:n
-#    driftij!(x,v,i,j,-h2)
+    driftij!(x,v,i,j,-h2)
     keplerij!(m,x,v,i,j,h2)
   end
 end
-#if alpha != 1.0
-#  phisalpha!(x,v,h,m,2.*(1.-alpha),n)
-#end
+if alpha != 1.0
+  phisalpha!(x,v,h,m,2.*(1.-alpha),n)
+end
 for i=n-1:-1:1
   for j=n:-1:i+1
     keplerij!(m,x,v,i,j,h2)
-#    driftij!(x,v,i,j,-h2)
+    driftij!(x,v,i,j,-h2)
   end
 end
-#drift!(x,v,h2,n)
+drift!(x,v,h2,n)
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n)
 end
@@ -638,7 +640,7 @@ if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n)
 end
 drift!(x,v,h2,n)
-@inbounds for i=1:n-1
+for i=1:n-1
   for j=i+1:n
     driftij!(x,v,i,j,-h2)
     keplerij!(m,x,v,i,j,h2,spred)
@@ -648,8 +650,7 @@ extrapolate_s!(n,spred,ssave)
 if alpha != 1.0
   phisalpha!(x,v,h,m,2.*(1.-alpha),n)
 end
-#phisalpha!(x,v,h,m,2.,n)
-@inbounds for i=n-1:-1:1
+for i=n-1:-1:1
   for j=n:-1:i+1
     keplerij!(m,x,v,i,j,h2,spred)
     driftij!(x,v,i,j,-h2)
@@ -673,17 +674,19 @@ end
 function jac_multiplyij!(jac_full::Array{Float64,4},jac_ij::Array{Float64,2},i::Int64,j::Int64,nbody::Int64)
 # Multiplies the Jacobians for just the i & j components:
 jac_tmp = copy(jac_full)
-# Set i & j to zero so we can multiply these components:
+# multiply jacobian for planets i & j:
 for p=1:7, k=1:7, q=1:nbody
+# Set i & j to zero so we can multiply these components:
   jac_full[p,i,k,q] = 0.0
   jac_full[p,j,k,q] = 0.0
-end
-# multiply jacobian for planets i & j:
-for p=1:7, k=1:7, q=1:nbody, m=1:7
-  jac_full[p,i,k,q] += jac_ij[  p,  m]*jac_tmp[m,i,k,q]
-  jac_full[p,i,k,q] += jac_ij[  p,7+m]*jac_tmp[m,j,k,q]
-  jac_full[p,j,k,q] += jac_ij[7+p,  m]*jac_tmp[m,i,k,q]
-  jac_full[p,j,k,q] += jac_ij[7+p,7+m]*jac_tmp[m,j,k,q]
+  for w=1:7
+    # First seven indices of jac_ij refer to planet i:
+    jac_full[p,i,k,q] += jac_ij[  p,  w]*jac_tmp[w,i,k,q]
+    jac_full[p,i,k,q] += jac_ij[  p,7+w]*jac_tmp[w,j,k,q]
+    # Next seven indices of jac_ij refer to planet j:
+    jac_full[p,j,k,q] += jac_ij[7+p,  w]*jac_tmp[w,i,k,q]
+    jac_full[p,j,k,q] += jac_ij[7+p,7+w]*jac_tmp[w,j,k,q]
+  end
 end
 return
 end
@@ -693,8 +696,8 @@ function jac_multiply!(jac_full::Array{Float64,4},jac_step::Array{Float64,4},nbo
 jac_tmp = copy(jac_full)
 fill!(jac_full,0.0)
 # multiply jacobian
-for j=1:nbody, i=1:7, l=1:nbody, k=1:7, n=1:nbody, m=1:7
-  jac_full[i,j,k,l] += jac_step[i,j,m,n]*jac_tmp[m,n,k,l]
+for j=1:nbody, i=1:7, l=1:nbody, k=1:7, n=1:nbody, w=1:7
+  jac_full[i,j,k,l] += jac_step[i,j,w,n]*jac_tmp[w,n,k,l]
 end
 return
 end
@@ -709,27 +712,27 @@ if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n,jac_phi)
   jac_multiply!(jac_step,jac_phi,n)
 end
-#drift!(x,v,h2,n,jac_step)
+drift!(x,v,h2,n,jac_step)
 jac_ij = zeros(Float64,14,14)
 for i=1:n-1
   for j=i+1:n
-#    driftij!(x,v,i,j,-h2,jac_step,n)
+    driftij!(x,v,i,j,-h2,jac_step,n)
     keplerij!(m,x,v,i,j,h2,jac_ij)
     jac_multiplyij!(jac_step,jac_ij,i,j,n)
   end
 end
-#if alpha != 1.0
-#  phisalpha!(x,v,h,m,2.*(1.-alpha),n,jac_phi)
-#  jac_multiply!(jac_step,jac_phi,n)
-#end
+if alpha != 1.0
+  phisalpha!(x,v,h,m,2.*(1.-alpha),n,jac_phi)
+  jac_multiply!(jac_step,jac_phi,n)
+end
 for i=n-1:-1:1
   for j=n:-1:i+1
     keplerij!(m,x,v,i,j,h2,jac_ij)
     jac_multiplyij!(jac_step,jac_ij,i,j,n)
-#    driftij!(x,v,i,j,-h2,jac_step,n)
+    driftij!(x,v,i,j,-h2,jac_step,n)
   end
 end
-#drift!(x,v,h2,n,jac_step)
+drift!(x,v,h2,n,jac_step)
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n,jac_phi)
   jac_multiply!(jac_step,jac_phi,n)

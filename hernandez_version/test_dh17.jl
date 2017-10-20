@@ -8,11 +8,12 @@ include("ttv.jl")
 # Next, try computing three-body Keplerian Jacobian:
 
 n = 3
+#n = 2
 t0 = 7257.93115525
 #h  = 0.05
-h  = 10.0
+h  = 0.15
 tmax = 600.0
-dlnq = 1e-4
+dlnq = 1e-5
 
 elements = readdlm("elements.txt",',')
 elements[2,1] = 1.0
@@ -61,6 +62,12 @@ dh17!(x,v,h,m,n,jac_step)
 xsave = copy(x)
 vsave = copy(v)
 msave = copy(m)
+## Check that we have agreement:
+#xtest = copy(x0)
+#vtest = copy(v0)
+#m = copy(m0)
+#dh17!(xtest,vtest,h,m,n)
+#println("x/v difference: ",x-xtest,v-vtest)
 
 # Now compute numerical derivatives:
 jac_step_num = zeros(7,n,7,n)
@@ -117,19 +124,20 @@ for j=1:n
       jac_step_num[  k,i,7,j] = (x[k,i]-xsave[k,i])/dq
       jac_step_num[3+k,i,7,j] = (v[k,i]-vsave[k,i])/dq
     end
-    # Mass unchanged -> identity
-    jac_step_num[7,i,7,i] = 1.0
   end
+  # Mass unchanged -> identity
+  jac_step_num[7,j,7,j] = 1.0
 end
 
 # Now, compare the results:
 #println(jac_step)
 #println(jac_step_num)
 
-for j=1:3
+for j=1:n
   for i=1:7
-    for k=1:3
-      println(jac_step[i,j,:,k]," ",jac_step_num[i,j,:,k]," ",jac_step[i,j,:,k]./jac_step_num[i,j,:,k]-1.)
+    for k=1:n
+      println(i," ",j," ",k," ",jac_step[i,j,:,k]," ",jac_step_num[i,j,:,k]," ",jac_step[i,j,:,k]./jac_step_num[i,j,:,k]-1.)
+#      println(i," ",j," 7 ",k," ",jac_step[i,j,7,k]," ",jac_step_num[i,j,7,k]," ",jac_step[i,j,7,k]./jac_step_num[i,j,7,k]-1.)
     end
   end
 end
