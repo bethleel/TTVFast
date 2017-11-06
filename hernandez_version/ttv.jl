@@ -642,29 +642,52 @@ function jac_multiplyij!(jac_full::Array{Float64,4},jac_ij::Array{Float64,2},i::
 # Multiplies the Jacobians for just the i & j components:
 jac_tmp = copy(jac_full)
 # multiply jacobian for planets i & j:
-for p=1:7, k=1:7, q=1:nbody
+#@inbounds for p=1:7, k=1:7, q=1:nbody
+tmp1 = 0.0; tmp2=0.0; tmp3 = 0.0; tmp4=0.0
+@inbounds for q=1:nbody, k=1:7, p=1:7
 # Set i & j to zero so we can multiply these components:
-  jac_full[p,i,k,q] = 0.0
-  jac_full[p,j,k,q] = 0.0
-  for w=1:7
+  tmp1 = 0.0; tmp2=0.0
+  @inbounds for w=1:7
+    tmp3 = jac_tmp[w,i,k,q]
+    tmp4 = jac_tmp[w,j,k,q]
     # First seven indices of jac_ij refer to planet i:
-    jac_full[p,i,k,q] += jac_ij[  p,  w]*jac_tmp[w,i,k,q]
-    jac_full[p,i,k,q] += jac_ij[  p,7+w]*jac_tmp[w,j,k,q]
+    tmp1 += jac_ij[  p,  w]*tmp3 + jac_ij[  p,7+w]*tmp4
     # Next seven indices of jac_ij refer to planet j:
-    jac_full[p,j,k,q] += jac_ij[7+p,  w]*jac_tmp[w,i,k,q]
-    jac_full[p,j,k,q] += jac_ij[7+p,7+w]*jac_tmp[w,j,k,q]
+    tmp2 += jac_ij[7+p,  w]*tmp3 + jac_ij[7+p,7+w]*tmp4
   end
+  jac_full[p,i,k,q] = tmp1
+  jac_full[p,j,k,q] = tmp2
 end
 return
 end
+
+function jac_multiplyij_dot!(jac_full::Array{Float64,4},jac_ij::Array{Float64,2},i::Int64,j::Int64,nbody::Int64)
+# Multiplies the Jacobians for just the i & j components:
+jac_tmp = copy(jac_full)
+# multiply jacobian for planets i & j:
+#@inbounds for p=1:7, k=1:7, q=1:nbody
+tmp1 = 0.0; tmp2=0.0; tmp3 = 0.0; tmp4=0.0
+@inbounds for q=1:nbody, k=1:7, p=1:7
+  jac_full[p,i,k,q] = dot(jac_ij[  p, 1:7],jac_tmp[1:7,i,k,q])+ dot(jac_ij[  p,8:14],jac_tmp[1:7,j,k,q])
+  jac_full[p,j,k,q] = dot(jac_ij[7+p, 1:7],jac_tmp[1:7,i,k,q])+ dot(jac_ij[7+p,8:14],jac_tmp[1:7,j,k,q])
+end
+return
+end
+
 
 function jac_multiply!(jac_full::Array{Float64,4},jac_step::Array{Float64,4},nbody::Int64)
 # Multiplies the Jacobians
 jac_tmp = copy(jac_full)
 fill!(jac_full,0.0)
 # multiply jacobian
-for j=1:nbody, i=1:7, l=1:nbody, k=1:7, n=1:nbody, w=1:7
-  jac_full[i,j,k,l] += jac_step[i,j,w,n]*jac_tmp[w,n,k,l]
+#for j=1:nbody, i=1:7, l=1:nbody, k=1:7, n=1:nbody, w=1:7
+tmp1 = 0.0
+@inbounds for l=1:nbody, k=1:7, j=1:nbody, i=1:7
+  tmp1 = 0.0
+  @inbounds for n=1:nbody, w=1:7
+    tmp1 += jac_step[i,j,w,n]*jac_tmp[w,n,k,l]
+  end
+  jac_full[i,j,k,l] = tmp1
 end
 return
 end

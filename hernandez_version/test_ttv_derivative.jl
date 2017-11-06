@@ -26,6 +26,7 @@ tt3 = zeros(n,maximum(ntt))
 count = zeros(Int64,n)
 count1 = zeros(Int64,n)
 # Call the ttv function:
+dq = ttv!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
 @time dq = ttv!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
 # Now call with half the timestep:
 count2 = zeros(Int64,n)
@@ -34,14 +35,16 @@ dq = ttv!(n,t0,h/10.,tmax,elements,tt2,count2,0.0,0,0)
 
 # Now, compute derivatives (with respect to initial cartesian positions/masses):
 dtdq0 = zeros(n,maximum(ntt),7,n)
-ttv!(n,t0,h,tmax,elements,tt,count,dtdq0)
+@time ttv!(n,t0,h,tmax,elements,tt,count,dtdq0)
+read(STDIN,Char)
 
 # Check that this is working properly:
 for i=1:n
   for j=1:count2[i]
-    println(i," ",j," ",tt[i,j]," ",tt2[i,j]," ",tt[i,j]-tt2[i,j])
+    println(i," ",j," ",tt[i,j]," ",tt2[i,j]," ",tt[i,j]-tt2[i,j]," ",tt1[i,j]-tt2[i,j])
   end
 end
+read(STDIN,Char)
 
 # Compute derivatives numerically:
 nq = 15
@@ -77,7 +80,7 @@ for jq=1:n
         end
         dtdq0_sum[i,k,iq,jq] = dtdq0_num[i,k,iq,jq,imin]
         itdq0[i,k,iq,jq] = imin
-        println(iq," ",jq," ",i," ",k," ",tt1[i,k]," ",dtdq0_sum[i,k,iq,jq]," ",dtdq0[i,k,iq,jq]," ",dtdq0_sum[i,k,iq,jq]/dtdq0[i,k,iq,jq]-1.)
+#        println(iq," ",jq," ",i," ",k," ",tt1[i,k]," ",dtdq0_sum[i,k,iq,jq]," ",dtdq0[i,k,iq,jq]," ",dtdq0_sum[i,k,iq,jq]/dtdq0[i,k,iq,jq]-1.)
       end
     end
   end

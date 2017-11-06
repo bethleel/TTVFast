@@ -314,7 +314,7 @@ state[12] = ds
 return iter
 end
 
-function compute_jacobian!(h,k,x0,v0,beta0,s,f,g,dfdt,dgdt,cx,sx,g1,g2,r0,dr0dt,r,jacobian)
+function compute_jacobian!(h::Float64,k::Float64,x0::Array{Float64,1},v0::Array{Float64,1},beta0::Float64,s::Float64,f::Float64,g::Float64,dfdt::Float64,dgdt::Float64,cx::Float64,sx::Float64,g1::Float64,g2::Float64,r0::Float64,dr0dt::Float64,r::Float64,jacobian::Array{Float64,2})
 # Compute the Jacobian.  jacobian[i,j] is derivative of final state variable q[i]
 # with respect to initial state variable q0[j], where q = {x,v,k} & q0 = {x0,v0,k}.
 # Now, compute the Jacobian: (9/18/2017 notes)
@@ -332,38 +332,49 @@ dbetadr0 = -2k/r0^2
 dbetadv0 = -2absv0
 dbetadk  = 2/r0
 # "p" for partial derivative:
-pxpr0 = k/r0^2*g2*x0+g1*v0
-pxpa0 = g2*v0
-pxpk  = -g2/r0*x0
-pxps  = -k/r0*g1*x0+(r0*g0+dotalpha0*g1)*v0
-pxpbeta = -k/(2beta0*r0)*(s*g1-2g2)*x0+1/(2beta0)*(s*r0*g0-r0*g1+s*dotalpha0*g1-2*dotalpha0*g2)*v0
-prvpr0 = k*g1/r0^2*x0+g0*v0
-prvpa0 = g1*v0
-prvpk = -g1/r0*x0
-prvps = -k*g0/r0*x0+(-beta0*r0*g1+dotalpha0*g0)*v0
-prvpbeta = -k/(2beta0*r0)*(s*g0-g1)*x0+1/(2beta0)*(-s*r0*beta0*g1+dotalpha0*s*g0-dotalpha0*g1)*v0
+pxpr0 = zeros(Float64,3); pxpa0=zeros(Float64,3); pxpk=zeros(Float64,3); pxps=zeros(Float64,3); pxpbeta=zeros(Float64,3)
+dxdr0 = zeros(Float64,3); dxda0=zeros(Float64,3); dxdk=zeros(Float64,3); dxdv0 =zeros(Float64,3)
+prvpr0 = zeros(Float64,3); prvpa0=zeros(Float64,3); prvpk=zeros(Float64,3); prvps=zeros(Float64,3); prvpbeta=zeros(Float64,3)
+drvdr0 = zeros(Float64,3); drvda0=zeros(Float64,3); drvdk=zeros(Float64,3); drvdv0=zeros(Float64,3)
+v = zeros(Float64,3); dvdr0 = zeros(Float64,3); dvda0=zeros(Float64,3); dvdv0=zeros(Float64,3); dvdk=zeros(Float64,3)
+for i=1:3
+  pxpr0[i] = k/r0^2*g2*x0[i]+g1*v0[i]
+  pxpa0[i] = g2*v0[i]
+  pxpk[i]  = -g2/r0*x0[i]
+  pxps[i]  = -k/r0*g1*x0[i]+(r0*g0+dotalpha0*g1)*v0[i]
+  pxpbeta[i] = -k/(2beta0*r0)*(s*g1-2g2)*x0[i]+1/(2beta0)*(s*r0*g0-r0*g1+s*dotalpha0*g1-2*dotalpha0*g2)*v0[i]
+  prvpr0[i] = k*g1/r0^2*x0[i]+g0*v0[i]
+  prvpa0[i] = g1*v0[i]
+  prvpk[i] = -g1/r0*x0[i]
+  prvps[i] = -k*g0/r0*x0[i]+(-beta0*r0*g1+dotalpha0*g0)*v0[i]
+  prvpbeta[i] = -k/(2beta0*r0)*(s*g0-g1)*x0[i]+1/(2beta0)*(-s*r0*beta0*g1+dotalpha0*s*g0-dotalpha0*g1)*v0[i]
+end
 prpr0 = g0
 prpa0 = g1
 prpk  = g2
 prps = (k-beta0*r0)*g1+dotalpha0*g0
 prpbeta = 1/(2beta0)*(s*(k-beta0*r0)*g1+dotalpha0*s*g0-dotalpha0*g1-2k*g2)
-dxdr0 = pxps*dsdr0 + pxpbeta*dbetadr0 + pxpr0
-dxda0 = pxps*dsda0 + pxpa0
-dxdv0 = pxps*dsdv0 + pxpbeta*dbetadv0
-dxdk  = pxps*dsdk  + pxpbeta*dbetadk + pxpk
-drvdr0 = prvps*dsdr0 + prvpbeta*dbetadr0 + prvpr0
-drvda0 = prvps*dsda0 + prvpa0
-drvdv0 = prvps*dsdv0 + prvpbeta*dbetadv0
-drvdk  = prvps*dsdk  + prvpbeta*dbetadk +prvpk
+for i=1:3
+  dxdr0[i] = pxps[i]*dsdr0 + pxpbeta[i]*dbetadr0 + pxpr0[i]
+  dxda0[i] = pxps[i]*dsda0 + pxpa0[i]
+  dxdv0[i] = pxps[i]*dsdv0 + pxpbeta[i]*dbetadv0
+  dxdk[i]  = pxps[i]*dsdk  + pxpbeta[i]*dbetadk + pxpk[i]
+  drvdr0[i] = prvps[i]*dsdr0 + prvpbeta[i]*dbetadr0 + prvpr0[i]
+  drvda0[i] = prvps[i]*dsda0 + prvpa0[i]
+  drvdv0[i] = prvps[i]*dsdv0 + prvpbeta[i]*dbetadv0
+  drvdk[i]  = prvps[i]*dsdk  + prvpbeta[i]*dbetadk +prvpk[i]
+end
 drdr0 = prpr0 + prps*dsdr0 + prpbeta*dbetadr0
 drda0 = prpa0 + prps*dsda0
 drdv0 = prps*dsdv0 + prpbeta*dbetadv0
 drdk  = prpk + prps*dsdk + prpbeta*dbetadk
-v = dfdt*x0+dgdt*v0
-dvdr0 = (drvdr0-drdr0*v)/r
-dvda0 = (drvda0-drda0*v)/r
-dvdv0 = (drvdv0-drdv0*v)/r
-dvdk  = (drvdk -drdk *v)/r
+for i=1:3
+  v[i] = dfdt*x0[i]+dgdt*v0[i]
+  dvdr0[i] = (drvdr0[i]-drdr0*v[i])/r
+  dvda0[i] = (drvda0[i]-drda0*v[i])/r
+  dvdv0[i] = (drvdv0[i]-drdv0*v[i])/r
+  dvdk[i]  = (drvdk[i] -drdk *v[i])/r
+end
 # Now, compute Jacobian:
 for i=1:3
   jacobian[  i,  i] = f
