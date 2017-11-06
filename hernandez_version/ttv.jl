@@ -66,10 +66,6 @@ gsave = zeros(Float64,n)
 dt::Float64 = 0.0
 gi = 0.0
 while t < t0+tmax
-  # Increment time by the time step:
-  t += h
-  # Increment counter by one:
-  istep +=1
   # Carry out a phi^2 mapping step:
 #  phi2!(x,v,h,m,n)
   dh17!(x,v,h,m,n,jac_step)
@@ -93,10 +89,14 @@ while t < t0+tmax
       jac_transit = copy(jac_prior)
       dt = findtransit2!(1,i,h,dt,m,xtransit,vtransit,jac_transit,dtdq)
       tt[i,count[i]]=t+dt
-      # Compute Jacobian with respect to initial cartesian coordinates:
-      for k=1:7, p=1:n, l=1:7, q=1:n
-        dtdq0[i,count[i],k,p] += dtdq[l,q]*jac_prior[l,q,k,p]
+      # Save for posterity:
+      for k=1:7, p=1:n
+        dtdq0[i,count[i],k,p] = dtdq[k,p]
       end
+      # Apply chain rule to compute Jacobian with respect to initial cartesian coordinates:
+#      for k=1:7, p=1:n, l=1:7, q=1:n
+#        dtdq0[i,count[i],k,p] += dtdq[l,q]*jac_prior[l,q,k,p]
+#      end
     end
     gsave[i] = gi
   end
@@ -104,11 +104,15 @@ while t < t0+tmax
   xprior = copy(x)
   vprior = copy(v)
   jac_prior = copy(jac_step)
+  # Increment time by the time step:
+  t += h
+  # Increment counter by one:
+  istep +=1
 end
 return 
 end
 
-function ttv!(n::Int64,t0::Float64,h::Float64,tmax::Float64,elements::Array{Float64,2},tt::Array{Float64,2},count::Array{Int64,1})
+function ttv!(n::Int64,t0::Float64,h::Float64,tmax::Float64,elements::Array{Float64,2},tt::Array{Float64,2},count::Array{Int64,1},dlnq::Float64,iq::Int64,jq::Int64)
 #fcons = open("fcons.txt","w");
 m=zeros(Float64,n)
 x=zeros(Float64,NDIM,n)
@@ -122,8 +126,34 @@ fill!(count,0)
 for i=1:n
   m[i] = elements[i,1]
 end
+# Allow for perturbations to initial conditions: jq labels body; iq labels phase-space element (or mass)
+# iq labels phase-space element (1-3: x; 4-6: v; 7: m)
+dq = 0.0
+if iq == 7 && dlnq != 0.0
+  dq = m[jq]*dlnq
+  m[jq] += dq
+end
 # Initialize the N-body problem using nested hierarchy of Keplerians:
 x,v = init_nbody(elements,t0,n)
+# Perturb the initial condition by an amount dlnq (if it is non-zero):
+if dlnq != 0.0 && iq > 0 && iq < 7
+  if iq < 4
+    if x[iq,jq] != 0
+      dq = x[iq,jq]*dlnq
+    else
+      dq = dlnq
+    end
+    x[iq,jq] += dq
+  else
+  # Same for v
+    if v[iq-3,jq] != 0
+      dq = v[iq-3,jq]*dlnq
+    else
+      dq = dlnq
+    end
+    v[iq-3,jq] += dq
+  end
+end
 xprior = copy(x)
 vprior = copy(v)
 # Set the time to the initial time:
@@ -138,10 +168,6 @@ gi  = 0.0
 dt::Float64 = 0.0
 # Loop over time steps:
 while t < t0+tmax
-  # Increment time by the time step:
-  t += h
-  # Increment counter by one:
-  istep +=1
   # Carry out a phi^2 mapping step:
 #  phi2!(x,v,h,m,n)
   dh17!(x,v,h,m,n)
@@ -173,8 +199,12 @@ while t < t0+tmax
       vprior[i,j]=v[i,j]
     end
   end
+  # Increment time by the time step:
+  t += h
+  # Increment counter by one:
+  istep +=1
 end
-return 
+return dq
 end
 
 # Advances the center of mass of a binary
@@ -905,11 +935,13 @@ for k=1:n
 end
 # Compute derivative of g with respect to time:
 gdot += (v[1,j]-v[1,i])^2+(v[2,j]-v[2,i])^2
+# Set dtdq to zero:
+fill!(dtdq,0.0)
 for k=1:7
   for p=1:n
     # Compute derivatives:
     dtdq[k,p] = -((jac_step[1,j,k,p]-jac_step[1,i,k,p])*(v[1,j]-v[1,i])+(jac_step[2,j,k,p]-jac_step[2,i,k,p])*(v[2,j]-v[2,i])+
-                  (jac_step[4,j,k,p]-jac_step[1,i,k,p])*(x[1,j]-x[1,i])+(jac_step[5,j,k,p]-jac_step[5,i,k,p])*(x[2,j]-x[2,i]))/gdot
+                  (jac_step[4,j,k,p]-jac_step[4,i,k,p])*(x[1,j]-x[1,i])+(jac_step[5,j,k,p]-jac_step[5,i,k,p])*(x[2,j]-x[2,i]))/gdot
   end
 end
 # Note: this is the time elapsed *after* the beginning of the timestep:

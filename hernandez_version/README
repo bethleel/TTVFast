@@ -306,8 +306,23 @@ other steps of dh17, and now test_dh17.jl gives good results!
 Next steps:
 
 1).  Concatenate multiple steps, and test these. [x]
-2).  Write transit time derivative, and test. [ ]
+2).  Write transit time derivative, and test. [x]
 3).  Write initial condition derivative, and test. [ ]
 4).  Profile code & see if there are ways to speed it up. [ ]
 
 Implemented transit-time derivatives;  now need to test if this works.
+
+11/6/2017
+Okay, got the TTV derivatives working!  I found a couple of bugs:
+1). Findtransit2 had the wrong jacobian element in the last line computing dtdq.
+2). Incrementing of time step should happen at *end* of step, not beginning.
+
+test_ttv_derivative.jl now loops over differnet dlnq values and takes double-sided
+derivatives for an accurate comparison of the numerical derivative with the
+analytic (since I expect the latter to be much more accurate).  It looks like
+the derivatives agree well, to better than 10% for the TRAPPIST-1 example case.
+
+So, I think the derivatives are being computed properly, and we can move on to
+the next steps.
+
+
