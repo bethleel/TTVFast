@@ -325,4 +325,18 @@ the derivatives agree well, to better than 10% for the TRAPPIST-1 example case.
 So, I think the derivatives are being computed properly, and we can move on to
 the next steps.
 
+11/7/2017
+The code is spending a *lot* of time in jac_multiply! & jac_multiplyij!
+(70% in the n=8 TRAPPIST-1 example)!  I tried using the matrix multiply
+function, which seems to give the same answer for each step, but when
+I use it over multiple time steps, causes bad results due to a bug
+that I have yet to identify.  My attempt at this is stored in ttv_square.jl
+(since the jacobian is stored in a 2x2 square matrix rather than the
+4-index matrix).
 
+All to say: perhaps the code can be refactored to improve the speed
+by a factor of 2-3.  I also should look at conserving memory allocation
+as well.
+
+But, this seems to be working for now, so I'll move on to the next
+step which is taking derivatives of the initial conditions.

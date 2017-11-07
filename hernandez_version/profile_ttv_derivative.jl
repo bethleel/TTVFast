@@ -4,9 +4,9 @@ include("/Users/ericagol/Computer/Julia/regress.jl")
 n = 8
 t0 = 7257.93115525
 #h  = 0.12
-h  = 0.05
-#tmax = 600.0
-tmax = 80.0
+h  = 0.075
+tmax = 600.0
+#tmax = 80.0
 
 # Read in initial conditions:
 elements = readdlm("elements.txt",',')
@@ -32,11 +32,14 @@ dq = ttv!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
 count2 = zeros(Int64,n)
 count3 = zeros(Int64,n)
 dq = ttv!(n,t0,h/10.,tmax,elements,tt2,count2,0.0,0,0)
+println("Timing error: ",maximum(abs.(tt2-tt1)))
 
 # Now, compute derivatives (with respect to initial cartesian positions/masses):
 dtdq0 = zeros(n,maximum(ntt),7,n)
 ttv!(n,t0,h,tmax,elements,tt,count,dtdq0)
 @time ttv!(n,t0,h,tmax,elements,tt,count,dtdq0)
 
+Profile.clear()
+#Profile.init(10^7,0.01)
 @profile ttv!(n,t0,h,tmax,elements,tt,count,dtdq0)
-Profile.print()
+#Profile.print()
