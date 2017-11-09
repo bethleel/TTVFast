@@ -27,7 +27,7 @@ count1 = zeros(Int64,n)
 # Now call with half the timestep:
 count2 = zeros(Int64,n)
 ttv!(n,t0,h/10.,tmax,elements,tt2,count2,0.0,0,0)
-println("Timing error: ",maximum(abs.(tt1-tt2))*24.*3600.)
+println("Timing error: ",maximum(abs.(tt1-tt2))*24.*3600.," sec")
 
 using PyPlot
 
