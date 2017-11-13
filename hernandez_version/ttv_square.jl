@@ -643,15 +643,10 @@ for i=1:n-1
     indj = (j-1)*7
     driftij!(x,v,i,j,-h2,jac_step,n)
     keplerij!(m,x,v,i,j,h2,jac_ij) # 21%
-    for k1=1:7, k2=1:7*n
-      jac_step_ij[  k1,k2]=jac_step[indi+k1,k2]
-      jac_step_ij[7+k1,k2]=jac_step[indj+k1,k2]
-    end
-    jac_step_ij .= *(jac_ij,jac_step_ij)
-    for k1=1:7, k2=1:7*n
-      jac_step[indi+k1,k2]=jac_step_ij[  k1,k2]
-      jac_step[indj+k1,k2]=jac_step_ij[7+k1,k2]
-    end
+    # Pick out indices for bodies i & j:
+    i1 = [indi+1:i*7;indj+1:j*7]
+    # Carry out multiplication on subset of matrix:
+    jac_step[i1,:] .= *(jac_ij,jac_step[i1,:])
   end
 end
 if alpha != 1.0
@@ -664,15 +659,10 @@ for i=n-1:-1:1
   for j=n:-1:i+1
     indj=(j-1)*7
     keplerij!(m,x,v,i,j,h2,jac_ij) # 23%
-    for k2=1:7*n, k1=1:7
-      jac_step_ij[  k1,k2]=jac_step[indi+k1,k2]
-      jac_step_ij[7+k1,k2]=jac_step[indj+k1,k2]
-    end
-    jac_step_ij .= *(jac_ij,jac_step_ij)
-    for k2=1:7*n, k1=1:7
-      jac_step[indi+k1,k2]=jac_step_ij[  k1,k2]
-      jac_step[indj+k1,k2]=jac_step_ij[7+k1,k2]
-    end
+    # Pick out indices for bodies i & j:
+    i1 = [indi+1:i*7;indj+1:j*7]
+    # Carry out multiplication on subset of matrix:
+    jac_step[i1,:] .= *(jac_ij,jac_step[i1,:])
     driftij!(x,v,i,j,-h2,jac_step,n) 
   end
 end
