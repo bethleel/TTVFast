@@ -51,12 +51,12 @@ t = t0
 # Set step counter to zero:
 istep = 0
 # Jacobian for each step (7- 6 elements+mass, n_planets, 7 - 6 elements+mass, n planets):
-jac_step = zeros(Float64,7,n,7,n)
-jac_prior = zeros(Float64,7,n,7,n)
+jac_step = zeros(Float64,7*n,7*n)
+jac_prior = zeros(Float64,7*n,7*n)
 dtdq = zeros(7,n)
 # Initialize to identity matrix:
-for i=1:7, j=1:n
-  jac_step[i,j,i,j] = 1.0
+for j=1:n, i=1:7
+  jac_step[(j-1)*7+i,(j-1)*7+i] = 1.0
 end
 
 # Save the g function, which computes the relative sky velocity dotted with relative position
@@ -229,15 +229,15 @@ return
 end
 
 # Drifts bodies i & j
-function driftij!(x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64,jac_step::Array{Float64,4},nbody::Int64)
+function driftij!(x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64,jac_step::Array{Float64,2},nbody::Int64)
 for k=1:NDIM
   x[k,i] += h*v[k,i]
   x[k,j] += h*v[k,j]
   # Now for Jacobian:
   for l=1:7
     for m=1:nbody
-      jac_step[k,i,  l,m] += h*jac_step[3+k,i,  l,m]
-      jac_step[k,j,  l,m] += h*jac_step[3+k,j,  l,m]
+      jac_step[(i-1)*7+k,(m-1)*7+l] += h*jac_step[(i-1)*7+3+k,(m-1)*7+l]
+      jac_step[(j-1)*7+k,(m-1)*7+l] += h*jac_step[(j-1)*7+3+k,(m-1)*7+l]
     end
   end    
 end
@@ -388,14 +388,14 @@ return
 end
 
 # Drifts all particles:
-function drift!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,n::Int64,jac_step::Array{Float64,4})
+function drift!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,n::Int64,jac_step::Array{Float64,2})
 for i=1:n
   for j=1:NDIM
     x[j,i] += h*v[j,i]
     # Now for Jacobian:
     for k=1:7
       for q=1:n
-        jac_step[j,i,k,q] += h*jac_step[3+j,i,k,q]
+        jac_step[(i-1)*7+j,(q-1)*7+k] += h*jac_step[(i-1)*7+3+j,(q-1)*7+k]
       end    
     end    
   end
@@ -451,7 +451,7 @@ end
 return
 end
 
-function phisalpha!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},alpha::Float64,n::Int64,jac_step::Array{Float64,4})
+function phisalpha!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},alpha::Float64,n::Int64,jac_step::Array{Float64,2})
 # Computes the 4th-order correction:
 #function [v] = phisalpha(x,v,h,m,alpha)
 #n = size(m,2);
@@ -501,7 +501,7 @@ end
 # Next, compute \tilde g_i acceleration vector (this is rewritten
 # slightly to avoid reference to \tilde a_i):
 fill!(jac_step,0.0)
-# Note that jac_step[k,i,p,j] is the derivative of the kth coordinate
+# Note that jac_step[(i-1)*7+k,(j-1)*7+p] is the derivative of the kth coordinate
 # of planet i with respect to the pth coordinate of planet j.
 for i=1:n-1
   for j=i+1:n
@@ -530,59 +530,59 @@ for i=1:n-1
       v[k,i] += m[j]*fac
       v[k,j] -= m[i]*fac
       # Mass derivative (first part is easy):
-      jac_step[3+k,i,7,j] += fac
-      jac_step[3+k,j,7,i] -= fac
+      jac_step[(i-1)*7+3+k,(j-1)*7+7] += fac
+      jac_step[(j-1)*7+3+k,(i-1)*7+7] -= fac
       # Position derivatives:
       fac *= 5.0/r2
       for p=1:3
-        jac_step[3+k,i,p,i] -= fac*m[j]*rij[p]
-        jac_step[3+k,i,p,j] += fac*m[j]*rij[p]
-        jac_step[3+k,j,p,j] -= fac*m[i]*rij[p]
-        jac_step[3+k,j,p,i] += fac*m[i]*rij[p]
+        jac_step[(i-1)*7+3+k,(i-1)*7+p] -= fac*m[j]*rij[p]
+        jac_step[(i-1)*7+3+k,(j-1)*7+p] += fac*m[j]*rij[p]
+        jac_step[(j-1)*7+3+k,(j-1)*7+p] -= fac*m[i]*rij[p]
+        jac_step[(j-1)*7+3+k,(i-1)*7+p] += fac*m[i]*rij[p]
       end
       # Second mass derivative:
       fac = 2*GNEWT*fac1*rij[k]/r1
-      jac_step[3+k,i,7,i] += fac*m[j]
-      jac_step[3+k,i,7,j] += fac*m[j]
-      jac_step[3+k,j,7,j] -= fac*m[i]
-      jac_step[3+k,j,7,i] -= fac*m[i]
+      jac_step[(i-1)*7+3+k,(i-1)*7+7] += fac*m[j]
+      jac_step[(i-1)*7+3+k,(j-1)*7+7] += fac*m[j]
+      jac_step[(j-1)*7+3+k,(j-1)*7+7] -= fac*m[i]
+      jac_step[(j-1)*7+3+k,(i-1)*7+7] -= fac*m[i]
       #  (There's also a mass term in dadq [x]. See below.)
       # Diagonal position terms:
       fac = fac1*fac2
-      jac_step[3+k,i,k,i] += fac*m[j]
-      jac_step[3+k,i,k,j] -= fac*m[j]
-      jac_step[3+k,j,k,j] += fac*m[i]
-      jac_step[3+k,j,k,i] -= fac*m[i]
+      jac_step[(i-1)*7+3+k,(i-1)*7+k] += fac*m[j]
+      jac_step[(i-1)*7+3+k,(j-1)*7+k] -= fac*m[j]
+      jac_step[(j-1)*7+3+k,(j-1)*7+k] += fac*m[i]
+      jac_step[(j-1)*7+3+k,(i-1)*7+k] -= fac*m[i]
       # Dot product \delta rij terms:
       fac = -2*fac1*(rij[k]*GNEWT*(m[i]+m[j])/(r2*r1)+aij[k])
       for p=1:3
         fac3 = fac*rij[p] + fac1*3.0*rij[k]*aij[p]
-        jac_step[3+k,i,p,i] += m[j]*fac3
-        jac_step[3+k,i,p,j] -= m[j]*fac3
-        jac_step[3+k,j,p,j] += m[i]*fac3
-        jac_step[3+k,j,p,i] -= m[i]*fac3
+        jac_step[(i-1)*7+3+k,(i-1)*7+p] += m[j]*fac3
+        jac_step[(i-1)*7+3+k,(j-1)*7+p] -= m[j]*fac3
+        jac_step[(j-1)*7+3+k,(j-1)*7+p] += m[i]*fac3
+        jac_step[(j-1)*7+3+k,(i-1)*7+p] -= m[i]*fac3
       end
       # Diagonal acceleration terms:
       fac = -fac1*r2
       # Duoh.  For dadq, have to loop over all other parameters!
       for d=1:n
         for p=1:3
-          jac_step[3+k,i,p,d] += fac*m[j]*(dadq[k,i,p,d]-dadq[k,j,p,d])
-          jac_step[3+k,j,p,d] -= fac*m[i]*(dadq[k,i,p,d]-dadq[k,j,p,d])
+          jac_step[(i-1)*7+3+k,(d-1)*7+p] += fac*m[j]*(dadq[k,i,p,d]-dadq[k,j,p,d])
+          jac_step[(j-1)*7+3+k,(d-1)*7+p] -= fac*m[i]*(dadq[k,i,p,d]-dadq[k,j,p,d])
         end
         # Don't forget mass-dependent term:
-        jac_step[3+k,i,7,d] += fac*m[j]*(dadq[k,i,4,d]-dadq[k,j,4,d])
-        jac_step[3+k,j,7,d] -= fac*m[i]*(dadq[k,i,4,d]-dadq[k,j,4,d])
+        jac_step[(i-1)*7+3+k,(d-1)*7+7] += fac*m[j]*(dadq[k,i,4,d]-dadq[k,j,4,d])
+        jac_step[(j-1)*7+3+k,(d-1)*7+7] -= fac*m[i]*(dadq[k,i,4,d]-dadq[k,j,4,d])
       end
       # Now, for the hardest term:  (\delta a_ij . r_ij ) r_ij [ ]
       fac = 3.*fac1*rij[k]
       for d=1:n
         for p=1:3
-          jac_step[3+k,i,p,d] += fac*m[j]*dotdadq[p,d]
-          jac_step[3+k,j,p,d] -= fac*m[i]*dotdadq[p,d]
+          jac_step[(i-1)*7+3+k,(d-1)*7+p] += fac*m[j]*dotdadq[p,d]
+          jac_step[(j-1)*7+3+k,(d-1)*7+p] -= fac*m[i]*dotdadq[p,d]
         end
-        jac_step[3+k,i,7,d] += fac*m[j]*dotdadq[4,d]
-        jac_step[3+k,j,7,d] -= fac*m[i]*dotdadq[4,d]
+        jac_step[(i-1)*7+3+k,(d-1)*7+7] += fac*m[j]*dotdadq[4,d]
+        jac_step[(j-1)*7+3+k,(d-1)*7+7] -= fac*m[i]*dotdadq[4,d]
       end
     end
   end
@@ -590,12 +590,12 @@ end
 for i=1:n
   for k=1:3
   # Position remains unchanged, so Jacobian of position should be identity matrix:
-    jac_step[  k,i,  k,i] += 1.0
+    jac_step[(i-1)*7+  k,(i-1)*7+  k] += 1.0
   # Jacobian of velocity has linear dependence on initial velocity
-    jac_step[3+k,i,3+k,i] += 1.0
+    jac_step[(i-1)*7+3+k,(i-1)*7+3+k] += 1.0
   end
   # Mass remains unchanged:
-  jac_step[7,i,7,i] += 1.0
+  jac_step[(i-1)*7+7,(i-1)*7+7] += 1.0
 end
 return
 end
@@ -638,7 +638,7 @@ g = (x[1,j]-x[1,i])*(v[1,j]-v[1,i])+(x[2,j]-x[2,i])*(v[2,j]-v[2,i])
 return g
 end
 
-function jac_multiplyij!(jac_full::Array{Float64,4},jac_ij::Array{Float64,2},i::Int64,j::Int64,nbody::Int64)
+function jac_multiplyij!(jac_full::Array{Float64,2},jac_ij::Array{Float64,2},i::Int64,j::Int64,nbody::Int64)
 # Multiplies the Jacobians for just the i & j components:
 jac_tmp = copy(jac_full)
 # multiply jacobian for planets i & j:
@@ -648,34 +648,20 @@ tmp1 = 0.0; tmp2=0.0; tmp3 = 0.0; tmp4=0.0
 # Set i & j to zero so we can multiply these components:
   tmp1 = 0.0; tmp2=0.0
   @inbounds for w=1:7
-    tmp3 = jac_tmp[w,i,k,q]
-    tmp4 = jac_tmp[w,j,k,q]
+    tmp3 = jac_tmp[(i-1)*7+w,(q-1)*7+k]
+    tmp4 = jac_tmp[(j-1)*7+w,(q-1)*7+k]
     # First seven indices of jac_ij refer to planet i:
     tmp1 += jac_ij[  p,  w]*tmp3 + jac_ij[  p,7+w]*tmp4
     # Next seven indices of jac_ij refer to planet j:
     tmp2 += jac_ij[7+p,  w]*tmp3 + jac_ij[7+p,7+w]*tmp4
   end
-  jac_full[p,i,k,q] = tmp1
-  jac_full[p,j,k,q] = tmp2
+  jac_full[(i-1)*7+p,(q-1)*7+k] = tmp1
+  jac_full[(j-1)*7+p,(q-1)*7+k] = tmp2
 end
 return
 end
 
-function jac_multiplyij_dot!(jac_full::Array{Float64,4},jac_ij::Array{Float64,2},i::Int64,j::Int64,nbody::Int64)
-# Multiplies the Jacobians for just the i & j components:
-jac_tmp = copy(jac_full)
-# multiply jacobian for planets i & j:
-#@inbounds for p=1:7, k=1:7, q=1:nbody
-tmp1 = 0.0; tmp2=0.0; tmp3 = 0.0; tmp4=0.0
-@inbounds for q=1:nbody, k=1:7, p=1:7
-  jac_full[p,i,k,q] = dot(jac_ij[  p, 1:7],jac_tmp[1:7,i,k,q])+ dot(jac_ij[  p,8:14],jac_tmp[1:7,j,k,q])
-  jac_full[p,j,k,q] = dot(jac_ij[7+p, 1:7],jac_tmp[1:7,i,k,q])+ dot(jac_ij[7+p,8:14],jac_tmp[1:7,j,k,q])
-end
-return
-end
-
-
-function jac_multiply!(jac_full::Array{Float64,4},jac_step::Array{Float64,4},nbody::Int64)
+function jac_multiply!(jac_full::Array{Float64,2},jac_step::Array{Float64,2},nbody::Int64)
 # Multiplies the Jacobians
 jac_tmp = copy(jac_full)
 fill!(jac_full,0.0)
@@ -685,98 +671,74 @@ tmp1 = 0.0
 @inbounds for l=1:nbody, k=1:7, j=1:nbody, i=1:7
   tmp1 = 0.0
   @inbounds for n=1:nbody, w=1:7
-    tmp1 += jac_step[i,j,w,n]*jac_tmp[w,n,k,l]
+    tmp1 += jac_step[(j-1)*7+i,(n-1)*7+w]*jac_tmp[(n-1)*7+w,(l-1)*7+k]
   end
-  jac_full[i,j,k,l] = tmp1
+  jac_full[(j-1)*7+i,(l-1)*7+k] = tmp1
 end
 return
 end
 
 # Carries out the DH17 mapping & computes the jacobian:
-function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,jac_step::Array{Float64,4})
+function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,jac_step::Array{Float64,2})
 h2 = 0.5*h
 alpha = alpha0
-jac_phi = zeros(Float64,7,n,7,n)
-jac_square1 = zeros(Float64,7*n,7*n)
-jac_square2 = zeros(Float64,7*n,7*n)
-jac_square3 = zeros(Float64,7*n,7*n)
+jac_phi = zeros(Float64,7*n,7*n)
+jac_tmp = zeros(Float64,7*n,7*n)
+jac_step_ij = zeros(Float64,14,7*n)
 # alpha = 0. is similar in precision to alpha=0.25
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n,jac_phi)
-  jac_multiply!(jac_step,jac_phi,n)
+  jac_tmp = jac_phi*jac_step # < 1%
+  @inbounds for k2=1:7*n, k1=1:7*n
+    jac_step[k1,k2]=jac_tmp[k1,k2]
+  end
 end
 drift!(x,v,h2,n,jac_step)
 jac_ij = zeros(Float64,14,14)
 for i=1:n-1
   for j=i+1:n
     driftij!(x,v,i,j,-h2,jac_step,n)
-    keplerij!(m,x,v,i,j,h2,jac_ij) # 10%
-#    jac_square1 = reshape(jac_step,7*n,7*n)
-#    jac_square2 = eye(7*n)
-#    for k1=1:7, k2=1:7
-##      jac_square2[(k1-1)*n+i,(k2-1)*n+i]=jac_ij[k1,k2]
-##      jac_square2[(k1-1)*n+i,(k2-1)*n+j]=jac_ij[k1,7+k2]
-##      jac_square2[(k1-1)*n+j,(k2-1)*n+i]=jac_ij[7+k1,k2]
-##      jac_square2[(k1-1)*n+j,(k2-1)*n+j]=jac_ij[7+k1,7+k2]
-#      jac_square2[(i-1)*7+k1,(i-1)*7+k2]=jac_ij[  k1,  k2]
-#      jac_square2[(i-1)*7+k1,(j-1)*7+k2]=jac_ij[  k1,7+k2]
-#      jac_square2[(j-1)*7+k1,(i-1)*7+k2]=jac_ij[7+k1,  k2]
-#      jac_square2[(j-1)*7+k1,(j-1)*7+k2]=jac_ij[7+k1,7+k2]
-#    end
-#    jac_square3 = *(jac_square2,jac_square1)
-    jac_multiplyij!(jac_step,jac_ij,i,j,n) # 25%
-    # Check that these agree:
-    #println("jac_step: ",i," ",j," ",maximum(abs.(reshape(jac_step,7*n,7*n)-jac_square3)))
-    #println(reshape(jac_step,7*n,7*n)-jac_square3)
+    keplerij!(m,x,v,i,j,h2,jac_ij) # 21%
+     for k1=1:7, k2=1:7*n
+       jac_step_ij[  k1,k2]=jac_step[(i-1)*7+k1,k2]
+       jac_step_ij[7+k1,k2]=jac_step[(j-1)*7+k1,k2]
+     end
+    jac_step_ij = *(jac_ij,jac_step_ij)
+    for k1=1:7, k2=1:7*n
+      jac_step[(i-1)*7+k1,k2]=jac_step_ij[  k1,k2]
+      jac_step[(j-1)*7+k1,k2]=jac_step_ij[7+k1,k2]
+    end
   end
 end
 if alpha != 1.0
-  phisalpha!(x,v,h,m,2.*(1.-alpha),n,jac_phi) # 6%
-#  jac_square1 = reshape(jac_step,7*n,7*n)
-#  jac_square2 = reshape(jac_phi,7*n,7*n)
-#  jac_square3 = *(jac_square2,jac_square1) # < 1%
-  jac_square3 = *(reshape(jac_phi,7*n,7*n),reshape(jac_step,7*n,7*n)) # < 1%
-  jac_multiply!(jac_step,jac_phi,n) # 16%
-  # Check that these agree:
-  diff_test = maximum(abs.(reshape(jac_step,7*n,7*n)-jac_square3))
-  if diff_test > 1e-12
-    println(diff_test)
+  phisalpha!(x,v,h,m,2.*(1.-alpha),n,jac_phi) # 10%
+  jac_tmp = jac_phi*jac_step # < 1%
+  @inbounds for k2=1:7*n, k1=1:7*n
+    jac_step[k1,k2]=jac_tmp[k1,k2]
   end
-#    println("jac_step: ",diff_test)
-#    jac_test = reshape(jac_step,7*n,7*n)
-#    for itest=1:7*n
-#      println(itest," ",jac_test[itest,itest]," ",jac_square3[itest,itest])
-#      read(STDIN,Char)
-#    end
-#  end
-  jac_step_test = copy(reshape(jac_square3,7,n,7,n))
-#  diff_test = maximum(abs.(jac_step-jac_step_test))
-  diff_test = 0.0
-  for k1=1:n, k2=1:7, k3=1:n, k4=1:7
-    if jac_step_test[k4,k3,k2,k1] != 0.0
-      difference = jac_step[k4,k3,k2,k1]/jac_step_test[k4,k3,k2,k1]-1.0
-      if abs(difference) > diff_test
-        diff_test = abs(difference)
-      end
-    end
-  end
-#  diff_test = maximum(abs.(jac_step./jac_step_test-1.0))
-  if diff_test > 1e-15
-    println(diff_test)
-  end
-  jac_step = copy(jac_step_test)
 end
 for i=n-1:-1:1
   for j=n:-1:i+1
-    keplerij!(m,x,v,i,j,h2,jac_ij) # 7.5%
-    jac_multiplyij!(jac_step,jac_ij,i,j,n) # 28%
+    keplerij!(m,x,v,i,j,h2,jac_ij) # 23%
+    for k2=1:7*n, k1=1:7
+      jac_step_ij[  k1,k2]=jac_step[(i-1)*7+k1,k2]
+      jac_step_ij[7+k1,k2]=jac_step[(j-1)*7+k1,k2]
+    end
+    jac_step_ij = *(jac_ij,jac_step_ij)
+    for k2=1:7*n, k1=1:7
+      jac_step[(i-1)*7+k1,k2]=jac_step_ij[  k1,k2]
+      jac_step[(j-1)*7+k1,k2]=jac_step_ij[7+k1,k2]
+    end
     driftij!(x,v,i,j,-h2,jac_step,n) 
   end
 end
 drift!(x,v,h2,n,jac_step)
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n,jac_phi)
-  jac_multiply!(jac_step,jac_phi,n)
+  jac_tmp = jac_phi*jac_step # < 1%
+  @inbounds for k2=1:7*n, k1=1:7*n
+    jac_step[k1,k2]=jac_tmp[k1,k2]
+  end
 end
 return
 end
@@ -951,7 +913,7 @@ end
 return tt::Float64
 end
 
-function findtransit2!(i::Int64,j::Int64,h::Float64,tt::Float64,m::Array{Float64,1},x1::Array{Float64,2},v1::Array{Float64,2},jac_step::Array{Float64,4},dtdq::Array{Float64,2})
+function findtransit2!(i::Int64,j::Int64,h::Float64,tt::Float64,m::Array{Float64,1},x1::Array{Float64,2},v1::Array{Float64,2},jac_step::Array{Float64,2},dtdq::Array{Float64,2})
 # Computes the transit time, approximating the motion as a fraction of a DH17 step forward in time.
 # Also computes the Jacobian of the transit time with respect to the initial parameters, dtdq[7,n].
 # Initial guess using linear interpolation:
@@ -1014,8 +976,8 @@ fill!(dtdq,0.0)
 for k=1:7
   for p=1:n
     # Compute derivatives:
-    dtdq[k,p] = -((jac_step[1,j,k,p]-jac_step[1,i,k,p])*(v[1,j]-v[1,i])+(jac_step[2,j,k,p]-jac_step[2,i,k,p])*(v[2,j]-v[2,i])+
-                  (jac_step[4,j,k,p]-jac_step[4,i,k,p])*(x[1,j]-x[1,i])+(jac_step[5,j,k,p]-jac_step[5,i,k,p])*(x[2,j]-x[2,i]))/gdot
+    dtdq[k,p] = -((jac_step[(j-1)*7+1,(p-1)*7+k]-jac_step[(i-1)*7+1,(p-1)*7+k])*(v[1,j]-v[1,i])+(jac_step[(j-1)*7+2,(p-1)*7+k]-jac_step[(i-1)*7+2,(p-1)*7+k])*(v[2,j]-v[2,i])+
+                  (jac_step[(j-1)*7+4,(p-1)*7+k]-jac_step[(i-1)*7+4,(p-1)*7+k])*(x[1,j]-x[1,i])+(jac_step[(j-1)*7+5,(p-1)*7+k]-jac_step[(i-1)*7+5,(p-1)*7+k])*(x[2,j]-x[2,i]))/gdot
   end
 end
 # Note: this is the time elapsed *after* the beginning of the timestep:

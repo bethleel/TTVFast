@@ -340,3 +340,32 @@ as well.
 
 But, this seems to be working for now, so I'll move on to the next
 step which is taking derivatives of the initial conditions.
+
+I tried to speed up ttv.jl by doing matrix multiplication with built-in
+function.  However, what happens is bizarre:  the line that carries out
+the matrix multiplication is evaluated quickly, while the profile shows
+that the actual matrix multiplication isn't carried out until the
+result is assigned to another matrix!  This is why this wasn't working
+before, I think.
+
+For the TRAPPIST-1 test case, I get about a 40% speed-up using matrix
+multiplication (for n=8; less for n=3), which is pretty good, but not 
+as good as I had been expecting.  So, ttv_square.jl is indeed faster,
+but not by a whole lot.
+
+Array allocation in compute_jacobian seems to be taking a *lot* of
+time, about 5% in total.  Perhaps fill!(xxx,0.0) would be similarly
+slow...
+
+11/13/2017
+Things to do:
+1).  Generalize for inclined planets. [ ]
+2).  Generalize for arbitrary mobile diagram.  [ ]
+3).  Compare with rebound. [ ]
+4).  Check coordinates. [ ]
+5).  Finish derivatives of initial conditions. [ ]
+6).  Allow output of derivatives of coordinates at arbitrary time steps. [ ]
+7).  Have TTV call with cartesian coordinates, and write wrapper for elements. [ ]
+8).  Figure out derivatives of kepler_init. [ ]
+9).  Figure out derivatives of nbody_init. [ ]
+10). Write a differentiable photodynamical model. [ ]
