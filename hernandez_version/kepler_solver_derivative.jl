@@ -332,11 +332,11 @@ dbetadr0 = -2k/r0^2
 dbetadv0 = -2absv0
 dbetadk  = 2/r0
 # "p" for partial derivative:
-pxpr0 = zeros(Float64,3); pxpa0=zeros(Float64,3); pxpk=zeros(Float64,3); pxps=zeros(Float64,3); pxpbeta=zeros(Float64,3)
-dxdr0 = zeros(Float64,3); dxda0=zeros(Float64,3); dxdk=zeros(Float64,3); dxdv0 =zeros(Float64,3)
-prvpr0 = zeros(Float64,3); prvpa0=zeros(Float64,3); prvpk=zeros(Float64,3); prvps=zeros(Float64,3); prvpbeta=zeros(Float64,3)
-drvdr0 = zeros(Float64,3); drvda0=zeros(Float64,3); drvdk=zeros(Float64,3); drvdv0=zeros(Float64,3)
-v = zeros(Float64,3); dvdr0 = zeros(Float64,3); dvda0=zeros(Float64,3); dvdv0=zeros(Float64,3); dvdk=zeros(Float64,3)
+#pxpr0 = zeros(Float64,3); pxpa0=zeros(Float64,3); pxpk=zeros(Float64,3); pxps=zeros(Float64,3); pxpbeta=zeros(Float64,3)
+#dxdr0 = zeros(Float64,3); dxda0=zeros(Float64,3); dxdk=zeros(Float64,3); dxdv0 =zeros(Float64,3)
+#prvpr0 = zeros(Float64,3); prvpa0=zeros(Float64,3); prvpk=zeros(Float64,3); prvps=zeros(Float64,3); prvpbeta=zeros(Float64,3)
+#drvdr0 = zeros(Float64,3); drvda0=zeros(Float64,3); drvdk=zeros(Float64,3); drvdv0=zeros(Float64,3)
+#vtmp = zeros(Float64,3); dvdr0 = zeros(Float64,3); dvda0=zeros(Float64,3); dvdv0=zeros(Float64,3); dvdk=zeros(Float64,3)
 for i=1:3
   pxpr0[i] = k/r0^2*g2*x0[i]+g1*v0[i]
   pxpa0[i] = g2*v0[i]
@@ -369,11 +369,11 @@ drda0 = prpa0 + prps*dsda0
 drdv0 = prps*dsdv0 + prpbeta*dbetadv0
 drdk  = prpk + prps*dsdk + prpbeta*dbetadk
 for i=1:3
-  v[i] = dfdt*x0[i]+dgdt*v0[i]
-  dvdr0[i] = (drvdr0[i]-drdr0*v[i])/r
-  dvda0[i] = (drvda0[i]-drda0*v[i])/r
-  dvdv0[i] = (drvdv0[i]-drdv0*v[i])/r
-  dvdk[i]  = (drvdk[i] -drdk *v[i])/r
+  vtmp[i] = dfdt*x0[i]+dgdt*v0[i]
+  dvdr0[i] = (drvdr0[i]-drdr0*vtmp[i])/r
+  dvda0[i] = (drvda0[i]-drda0*vtmp[i])/r
+  dvdv0[i] = (drvdv0[i]-drdv0*vtmp[i])/r
+  dvdk[i]  = (drvdk[i] -drdk *vtmp[i])/r
 end
 # Now, compute Jacobian:
 for i=1:3
@@ -383,17 +383,15 @@ for i=1:3
   jacobian[3+i,3+i] = dgdt
   jacobian[  i,7] = dxdk[i]
   jacobian[3+i,7] = dvdk[i]
-  for j=1:3
-    jacobian[  i,  j] += dxdr0[i]*x0[j]/r0
-    jacobian[  i,  j] += dxda0[i]*v0[j]
-    jacobian[  i,3+j] += dxdv0[i]*v0[j]/absv0
-    jacobian[  i,3+j] += dxda0[i]*x0[j]
-    jacobian[3+i,  j] += dvdr0[i]*x0[j]/r0
-    jacobian[3+i,  j] += dvda0[i]*v0[j]
-    jacobian[3+i,3+j] += dvdv0[i]*v0[j]/absv0
-    jacobian[3+i,3+j] += dvda0[i]*x0[j]
-  end
-  jacobian[7,7]=1.0
 end
+for j=1:3
+  for i=1:3
+    jacobian[  i,  j] += dxdr0[i]*x0[j]/r0 + dxda0[i]*v0[j]
+    jacobian[  i,3+j] += dxdv0[i]*v0[j]/absv0 + dxda0[i]*x0[j]
+    jacobian[3+i,  j] += dvdr0[i]*x0[j]/r0 + dvda0[i]*v0[j]
+    jacobian[3+i,3+j] += dvdv0[i]*v0[j]/absv0 + dvda0[i]*x0[j]
+  end
+end
+jacobian[7,7]=1.0
 return
 end

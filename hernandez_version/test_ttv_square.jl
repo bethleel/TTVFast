@@ -1,11 +1,11 @@
 include("ttv_square.jl")
 include("/Users/ericagol/Computer/Julia/regress.jl")
 
-n = 8
-#n = 3
+#n = 8
+n = 3
 t0 = 7257.93115525
 #h  = 0.12
-h  = 0.075
+h  = 0.05
 #tmax = 600.0
 tmax = 80.0
 

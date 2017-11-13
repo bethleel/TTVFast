@@ -1,0 +1,35 @@
+        - function ekepler(m,ecc)
+       21 eps=1e-12
+        - #real*8 e,e0,eps,m,ms,pi2,f0,f1,f2,f3,d1,d2,d3
+        - # This routine solves Kepler's equation for E as a function of (e,M)
+        - # using the procedure outlined in Murray & Dermott:
+       21 pi2=2.0*pi
+       21 ms=mod(m,pi2)
+       21 d3=1e10
+       21 e0=ms+ecc*0.85*sin(ms)/abs(sin(ms))
+       21 while abs(d3) > eps
+       48   f3=ecc*cos(e0)
+       48   f2=ecc*sin(e0)
+       48   f1=1.0-f3
+       48   f0=e0-ms-f2
+       48   d1=-f0/f1
+       48   d2=-f0/(f1+0.5*d1*f2)
+       48   d3=-f0/(f1+d2*0.5*(f2+d2*f3/3.))
+       48   e0=e0+d3
+        - end
+       21 ekep=e0+m-ms
+       21 return ekep
+        - end
+        - 
+        - function kepler(m,ecc)
+       21 @assert(ecc >= 0.0)
+       21 @assert(ecc <= 1.0)
+       21 f=m
+       21 if ecc > 0
+       21   ekep=ekepler(m,ecc)
+        - #  println(m-ekep+ecc*sin(ekep))
+       21   f=2.0*atan(sqrt((1.0+ecc)/(1.0-ecc))*tan(0.5*ekep))
+        - end
+       21 return f
+        - end
+        - 

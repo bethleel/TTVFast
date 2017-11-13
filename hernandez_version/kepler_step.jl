@@ -26,8 +26,8 @@ end
 
 function kepler_step!(gm::Float64,h::Float64,state0::Array{Float64,1},state::Array{Float64,1},jacobian::Array{Float64,2})
 # compute beta, r0, dr0dt, get x/v from state vector & call correct subroutine
-x0 = zeros(3)
-v0 = zeros(3)
+x0 = zeros(Float64,3)
+v0 = zeros(Float64,3)
 for k=1:3
   x0[k]=state0[k+1]
   v0[k]=state0[k+4]
