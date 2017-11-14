@@ -27,19 +27,19 @@ tt3 = zeros(n,maximum(ntt))
 count = zeros(Int64,n)
 count1 = zeros(Int64,n)
 # Call the ttv function:
-dq = ttv!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
-@time dq = ttv!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
-@time dq = ttv!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
+dq = @inbounds ttv!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
+@time dq = @inbounds ttv!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
+@time dq = @inbounds ttv!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
 # Now call with half the timestep:
 count2 = zeros(Int64,n)
 count3 = zeros(Int64,n)
-dq = ttv!(n,t0,h/10.,tmax,elements,tt2,count2,0.0,0,0)
+dq = @inbounds ttv!(n,t0,h/10.,tmax,elements,tt2,count2,0.0,0,0)
 
 # Now, compute derivatives (with respect to initial cartesian positions/masses):
 dtdq0 = zeros(n,maximum(ntt),7,n)
-ttv!(n,t0,h,tmax,elements,tt,count,dtdq0)
-@time ttv!(n,t0,h,tmax,elements,tt,count,dtdq0)
-@time ttv!(n,t0,h,tmax,elements,tt,count,dtdq0)
+@inbounds ttv!(n,t0,h,tmax,elements,tt,count,dtdq0)
+@time @inbounds ttv!(n,t0,h,tmax,elements,tt,count,dtdq0)
+@time @inbounds ttv!(n,t0,h,tmax,elements,tt,count,dtdq0)
 read(STDIN,Char)
 
 # Check that this is working properly:

@@ -1,7 +1,7 @@
-include("ttv_square.jl")
 include("/Users/ericagol/Computer/Julia/regress.jl")
 
 n = 8
+include("ttv_square.jl")
 t0 = 7257.93115525
 #h  = 0.12
 h  = 0.075

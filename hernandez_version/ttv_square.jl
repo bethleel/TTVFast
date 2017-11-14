@@ -10,13 +10,15 @@ const third = 1./3.
 const alpha0 = 0.0
 include("kepler_step.jl")
 include("init_nbody.jl")
+
 const pxpr0 = zeros(Float64,3);const  pxpa0=zeros(Float64,3);const  pxpk=zeros(Float64,3);const  pxps=zeros(Float64,3);const  pxpbeta=zeros(Float64,3)
 const dxdr0 = zeros(Float64,3);const  dxda0=zeros(Float64,3);const  dxdk=zeros(Float64,3);const  dxdv0 =zeros(Float64,3)
 const prvpr0 = zeros(Float64,3);const  prvpa0=zeros(Float64,3);const  prvpk=zeros(Float64,3);const  prvps=zeros(Float64,3);const  prvpbeta=zeros(Float64,3)
 const drvdr0 = zeros(Float64,3);const  drvda0=zeros(Float64,3);const  drvdk=zeros(Float64,3);const  drvdv0=zeros(Float64,3)
 const vtmp = zeros(Float64,3);const  dvdr0 = zeros(Float64,3);const  dvda0=zeros(Float64,3);const  dvdv0=zeros(Float64,3);const  dvdk=zeros(Float64,3)
 
-const state0 = zeros(Float64,12); state = zeros(Float64,12); delx = zeros(Float64,NDIM); delv = zeros(Float64,NDIM); xcm = zeros(Float64,NDIM); vcm = zeros(Float64,NDIM)
+#const state0 = zeros(Float64,12); state = zeros(Float64,12); delx = zeros(Float64,NDIM); delv = zeros(Float64,NDIM); xcm = zeros(Float64,NDIM); vcm = zeros(Float64,NDIM)
+#const jac_phi = zeros(Float64,7*n,7*n); const jac_ij = zeros(Float64,14,14)
 
 function ttv!(n::Int64,t0::Float64,h::Float64,tmax::Float64,elements::Array{Float64,2},tt::Array{Float64,2},count::Array{Int64,1},dtdq0::Array{Float64,4})
 #fcons = open("fcons.txt","w");
@@ -231,6 +233,7 @@ function keplerij!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},i
 # The state vector has: 1 time; 2-4 position; 5-7 velocity; 8 r0; 9 dr0dt; 10 beta; 11 s; 12 ds
 # Initial state:
 state0 = zeros(Float64,12)
+state0[11] = 0.0
 # Final state (after a step):
 state = zeros(Float64,12)
 delx = zeros(Float64,NDIM)
@@ -271,6 +274,7 @@ function keplerij!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},i
 # The state vector has: 1 time; 2-4 position; 5-7 velocity; 8 r0; 9 dr0dt; 10 beta; 11 s; 12 ds
 # Initial state:
 state0 = zeros(Float64,12)
+state0[11] = 0.0
 # Final state (after a step):
 state = zeros(Float64,12)
 delx = zeros(Float64,NDIM)
@@ -307,18 +311,18 @@ end
 jac_ij[ 7, 7] = 1.0  # the masses don't change with time!
 jac_ij[14,14] = 1.0
 for k=1:NDIM
-   jac_ij[   k,   k] +=   mi
-   jac_ij[   k, 3+k] += h*mi
-   jac_ij[   k, 7+k] +=   mj
-   jac_ij[   k,10+k] += h*mj
-   jac_ij[ 3+k, 3+k] +=   mi
-   jac_ij[ 3+k,10+k] +=   mj
-   jac_ij[ 7+k,   k] +=   mi
-   jac_ij[ 7+k, 3+k] += h*mi
-   jac_ij[ 7+k, 7+k] +=   mj
-   jac_ij[ 7+k,10+k] += h*mj
-   jac_ij[10+k, 3+k] +=   mi
-   jac_ij[10+k,10+k] +=   mj
+   jac_ij[   k,   k] =   mi
+   jac_ij[   k, 3+k] = h*mi
+   jac_ij[   k, 7+k] =   mj
+   jac_ij[   k,10+k] = h*mj
+   jac_ij[ 3+k, 3+k] =   mi
+   jac_ij[ 3+k,10+k] =   mj
+   jac_ij[ 7+k,   k] =   mi
+   jac_ij[ 7+k, 3+k] = h*mi
+   jac_ij[ 7+k, 7+k] =   mj
+   jac_ij[ 7+k,10+k] = h*mj
+   jac_ij[10+k, 3+k] =   mi
+   jac_ij[10+k,10+k] =   mj
 end
 for l=1:NDIM, k=1:NDIM
 # Compute derivatives of \delta x_i with respect to initial conditions:
@@ -344,17 +348,17 @@ for l=1:NDIM, k=1:NDIM
 end
 for k=1:NDIM
 # Compute derivatives of \delta x_i with respect to the masses:
-   jac_ij[   k, 7] += (x[k,i]+h*v[k,i]-xcm[k]-h*vcm[k]-mj*state[1+k])*mijinv + GNEWT*mj*jac_kepler[  k,7]
-   jac_ij[   k,14] += (x[k,j]+h*v[k,j]-xcm[k]-h*vcm[k]+mi*state[1+k])*mijinv + GNEWT*mj*jac_kepler[  k,7]
+   jac_ij[   k, 7] = (x[k,i]+h*v[k,i]-xcm[k]-h*vcm[k]-mj*state[1+k])*mijinv + GNEWT*mj*jac_kepler[  k,7]
+   jac_ij[   k,14] = (x[k,j]+h*v[k,j]-xcm[k]-h*vcm[k]+mi*state[1+k])*mijinv + GNEWT*mj*jac_kepler[  k,7]
 # Compute derivatives of \delta v_i with respect to the masses:
-   jac_ij[ 3+k, 7] += (v[k,i]-vcm[k]-mj*state[4+k])*mijinv + GNEWT*mj*jac_kepler[3+k,7]
-   jac_ij[ 3+k,14] += (v[k,j]-vcm[k]+mi*state[4+k])*mijinv + GNEWT*mj*jac_kepler[3+k,7]
+   jac_ij[ 3+k, 7] = (v[k,i]-vcm[k]-mj*state[4+k])*mijinv + GNEWT*mj*jac_kepler[3+k,7]
+   jac_ij[ 3+k,14] = (v[k,j]-vcm[k]+mi*state[4+k])*mijinv + GNEWT*mj*jac_kepler[3+k,7]
 # Compute derivatives of \delta x_j with respect to the masses:
-   jac_ij[ 7+k, 7] += (x[k,i]+h*v[k,i]-xcm[k]-h*vcm[k]-mj*state[1+k])*mijinv - GNEWT*mi*jac_kepler[  k,7]
-   jac_ij[ 7+k,14] += (x[k,j]+h*v[k,j]-xcm[k]-h*vcm[k]+mi*state[1+k])*mijinv - GNEWT*mi*jac_kepler[  k,7]
+   jac_ij[ 7+k, 7] = (x[k,i]+h*v[k,i]-xcm[k]-h*vcm[k]-mj*state[1+k])*mijinv - GNEWT*mi*jac_kepler[  k,7]
+   jac_ij[ 7+k,14] = (x[k,j]+h*v[k,j]-xcm[k]-h*vcm[k]+mi*state[1+k])*mijinv - GNEWT*mi*jac_kepler[  k,7]
 # Compute derivatives of \delta v_j with respect to the masses:
-   jac_ij[10+k, 7] += (v[k,i]-vcm[k]-mj*state[4+k])*mijinv - GNEWT*mi*jac_kepler[3+k,7]
-   jac_ij[10+k,14] += (v[k,j]-vcm[k]+mi*state[4+k])*mijinv - GNEWT*mi*jac_kepler[3+k,7]
+   jac_ij[10+k, 7] = (v[k,i]-vcm[k]-mj*state[4+k])*mijinv - GNEWT*mi*jac_kepler[3+k,7]
+   jac_ij[10+k,14] = (v[k,j]-vcm[k]+mi*state[4+k])*mijinv - GNEWT*mi*jac_kepler[3+k,7]
 end
 # Advance center of mass & individual Keplerian motions:
 centerm!(m,mijinv,x,v,vcm,delx,delv,i,j,h)
@@ -627,26 +631,45 @@ function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float
 h2 = 0.5*h
 alpha = alpha0
 jac_phi = zeros(Float64,7*n,7*n)
-jac_tmp = zeros(Float64,7*n,7*n)
-jac_step_ij = zeros(Float64,14,7*n)
+jac_ij = zeros(Float64,14,14)
+jac_tmp1 = zeros(Float64,14,7n)
+jac_tmp2 = zeros(Float64,14,7n)
 # alpha = 0. is similar in precision to alpha=0.25
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n,jac_phi)
   jac_step .= jac_phi*jac_step # < 1%
 end
 drift!(x,v,h2,n,jac_step)
-jac_ij = zeros(Float64,14,14)
-indi = 0; indj = 0
+indi = 0:1; indj = 0:1
+i2 = 1:7n
 for i=1:n-1
+#  indi = 7i-6:7i
   indi = (i-1)*7
   for j=i+1:n
+#    indj = 7j-6:7j
     indj = (j-1)*7
     driftij!(x,v,i,j,-h2,jac_step,n)
     keplerij!(m,x,v,i,j,h2,jac_ij) # 21%
     # Pick out indices for bodies i & j:
-    i1 = [indi+1:i*7;indj+1:j*7]
-    # Carry out multiplication on subset of matrix:
-    jac_step[i1,:] .= *(jac_ij,jac_step[i1,:])
+#    i1 = [indi;indj]
+#    jac_step[i1,i2] = *(jac_ij,jac_step[i1,i2])
+    @inbounds for k2=1:7n, k1=1:7
+      jac_tmp1[k1,k2] = jac_step[indi+k1,k2]
+    end
+    @inbounds for k2=1:7n, k1=1:7
+      jac_tmp1[7+k1,k2] = jac_step[indj+k1,k2]
+    end
+    # Carry out multiplication on the i/j components of matrix:
+#    jac_tmp2 = BLAS.gemm('N','N',jac_ij,jac_tmp1)
+    jac_tmp2 =BLAS.gemm!('N','N',1.0,jac_ij,jac_tmp1,0.0,jac_tmp2)
+    # Copy back to the Jacobian:
+    @inbounds for k2=1:7n, k1=1:7
+       jac_step[indi+k1,k2]=jac_tmp2[k1,k2]
+    end
+    @inbounds for k2=1:7n, k1=1:7
+      jac_step[indj+k1,k2]=jac_tmp2[7+k1,k2]
+    end
+#    jac_step[i1,i2] =jac_tmp
   end
 end
 if alpha != 1.0
@@ -655,14 +678,32 @@ if alpha != 1.0
 end
 indi=0; indj=0
 for i=n-1:-1:1
+#  indi=7i-6:7i
   indi=(i-1)*7
   for j=n:-1:i+1
+#    indj=7j-6:7j
     indj=(j-1)*7
     keplerij!(m,x,v,i,j,h2,jac_ij) # 23%
     # Pick out indices for bodies i & j:
-    i1 = [indi+1:i*7;indj+1:j*7]
-    # Carry out multiplication on subset of matrix:
-    jac_step[i1,:] .= *(jac_ij,jac_step[i1,:])
+#    i1 = [indi;indj]
+    # Carry out multiplication on the i/j components of matrix:
+#    jac_step[i1,i2] = *(jac_ij,jac_step[i1,i2])
+    @inbounds for k2=1:7n, k1=1:7
+      jac_tmp1[k1,k2] = jac_step[indi+k1,k2]
+    end
+    @inbounds for k2=1:7n, k1=1:7
+      jac_tmp1[7+k1,k2] = jac_step[indj+k1,k2]
+    end
+    # Carry out multiplication on the i/j components of matrix:
+#    jac_tmp2 = BLAS.gemm('N','N',jac_ij,jac_tmp1)
+    jac_tmp2 =BLAS.gemm!('N','N',1.0,jac_ij,jac_tmp1,0.0,jac_tmp2)
+    # Copy back to the Jacobian:
+    @inbounds for k2=1:7n, k1=1:7
+       jac_step[indi+k1,k2]=jac_tmp2[k1,k2]
+    end
+    @inbounds for k2=1:7n, k1=1:7
+      jac_step[indj+k1,k2]=jac_tmp2[7+k1,k2]
+    end
     driftij!(x,v,i,j,-h2,jac_step,n) 
   end
 end
@@ -674,133 +715,6 @@ end
 return
 end
 
-function findtransit!(i,h,g1,g2,m,x1,v1,x2,v2)
-# Computes the transit time, approximating the motion
-# as a Keplerian forward & backward in time, weighted by location in the timestep.
-# Initial guess using linear interpolation:
-tt = -g1*h/(g2-g1)
-dt = 1.0
-
-# Setup state vectors for kepler_step:
-s10 = zeros(Float64,12)
-s20 = zeros(Float64,12)
-# Final state (after a step):
-s1 = zeros(Float64,12)
-s2 = zeros(Float64,12)
-s = zeros(Float64,12)
-for k=1:NDIM
-  s10[1+k     ] = x1[k,i] - x1[k,1]
-  s10[1+k+NDIM] = v1[k,i] - v1[k,1]
-  s20[1+k     ] = x2[k,i] - x2[k,1]
-  s20[1+k+NDIM] = v2[k,i] - v2[k,1]
-end
-gm = GNEWT*(m[i]+m[1])
-iter = 0
-accel1= 0.
-accel2= 0.
-accel = zeros(Float64,3)
-while abs(dt) > 1e-8 && iter < 20
-  # Advance planet state at start of step to estimated transit time:
-  kepler_step!(gm,    tt, s10, s1)
-  # Reverse planet state at end of step to estimated transit time:
-  kepler_step!(gm, -h+tt, s20, s2)
-  # Weight:
-  w = tt/h
-  # Compute weighting of states:
-  for j=2:7
-    s[j] = (1.0-w)*s1[j]+w*s2[j]
-  end
-  # Compute time offset:
-  g = s[2]*s[5]+s[3]*s[6]
-  # Compute gravitational acceleration
-  r1_3 = norm(s1[2:4])^3
-  r2_3 = norm(s2[2:4])^3
-  for k=1:3
-    accel1 = -gm*s1[k+1]/r1_3
-    accel2 = -gm*s2[k+1]/r2_3
-    accel[k] = accel1*(1.0-w)+accel2*w
-  end
-  # Compute derivative of g with respect to time:
-  gdot = s[5]^2+s[6]^2+s[2]*accel[1]+s[3]*accel[2]
-  # Include time derivatives of interpolation (10/4/17 notes):
-  gdot += ((s2[2]-s1[2])*s[5] + (s2[5]-s1[5])*s[2] +(s2[3]-s1[3])*s[6]+(s2[6]-s1[6])*s[3])/h
-  # Refine estimate of transit time with Newton's method:
-  dt = -g/gdot
-  # Add refinement to estimated time:
-  tt += dt
-  iter +=1
-end
-# Note: this is the time elapsed *after* the beginning of the timestep:
-return tt
-end
-
-function findtransit!(i,h,g1,g2,m,x1,v1,x2,v2,dtdqn)
-# Computes the transit time, approximating the motion
-# as a Keplerian forward & backward in time, weighted by location in the timestep.
-# Initial guess using linear interpolation:
-tt = -g1*h/(g2-g1)
-dt = 1.0
-
-# Vector for computing derivative with respect to the initial and final elements
-# of the planet & star -  2 planets with 7 elements/masses at two times (initial & final):
-dtdqn = zeros(7,2,2)
-
-# Setup state vectors for kepler_step:
-s10 = zeros(Float64,12)
-s20 = zeros(Float64,12)
-# Final state (after a step):
-s1 = zeros(Float64,12)
-s2 = zeros(Float64,12)
-s = zeros(Float64,12)
-for k=1:NDIM
-  s10[1+k     ] = x1[k,i] - x1[k,1]
-  s10[1+k+NDIM] = v1[k,i] - v1[k,1]
-  s20[1+k     ] = x2[k,i] - x2[k,1]
-  s20[1+k+NDIM] = v2[k,i] - v2[k,1]
-end
-gm = GNEWT*(m[i]+m[1])
-iter = 0
-accel1= 0.
-accel2= 0.
-accel = zeros(Float64,3)
-while abs(dt) > 1e-8 && iter < 20
-  # Advance planet state at start of step to estimated transit time:
-  kepler_step!(gm,    tt, s10, s1)
-  # Reverse planet state at end of step to estimated transit time:
-  kepler_step!(gm, -h+tt, s20, s2)
-  # Weight:
-  w = tt/h
-  # Compute weighting of states:
-  for j=2:7
-    s[j] = (1.0-w)*s1[j]+w*s2[j]
-  end
-  # Compute time offset:
-  g = s[2]*s[5]+s[3]*s[6]
-  # Compute gravitational acceleration
-  r1_3 = norm(s1[2:4])^3
-  r2_3 = norm(s2[2:4])^3
-  for k=1:3
-    accel1 = -gm*s1[k+1]/r1_3
-    accel2 = -gm*s2[k+1]/r2_3
-    accel[k] = accel1*(1.0-w)+accel2*w
-  end
-  # Compute derivative of g with respect to time:
-  gdot = s[5]^2+s[6]^2+s[2]*accel[1]+s[3]*accel[2]
-  # Include time derivatives of interpolation (10/4/17 notes):
-  gdot += ((s2[2]-s1[2])*s[5] + (s2[5]-s1[5])*s[2] +(s2[3]-s1[3])*s[6]+(s2[6]-s1[6])*s[3])/h
-  # Refine estimate of transit time with Newton's method:
-  dt = -g/gdot
-  # Add refinement to estimated time:
-  tt += dt
-  iter +=1
-end
-# Now compute derivative of transit time with respect to initial (& final)
-# positions & masses of the planet/star:
-
-
-# Note: this is the time elapsed *after* the beginning of the timestep:
-return tt
-end
 
 function findtransit2!(i::Int64,j::Int64,h::Float64,tt::Float64,m::Array{Float64,1},x1::Array{Float64,2},v1::Array{Float64,2})
 # Computes the transit time, approximating the motion as a fraction of a DH17 step forward in time.
@@ -838,8 +752,6 @@ while abs(dt) > 1e-8 && iter < 20
   tt += dt
   iter +=1
 end
-# Compute derivatives:
-#  dh17!(x,v,tt,m,n,jac_step)
 # Note: this is the time elapsed *after* the beginning of the timestep:
 return tt::Float64
 end

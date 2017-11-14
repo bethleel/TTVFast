@@ -11,6 +11,13 @@ const alpha0 = 0.0
 include("kepler_step.jl")
 include("init_nbody.jl")
 
+const pxpr0 = zeros(Float64,3);const  pxpa0=zeros(Float64,3);const  pxpk=zeros(Float64,3);const  pxps=zeros(Float64,3);const  pxpbeta=zeros(Float64,3)
+const dxdr0 = zeros(Float64,3);const  dxda0=zeros(Float64,3);const  dxdk=zeros(Float64,3);const  dxdv0 =zeros(Float64,3)
+const prvpr0 = zeros(Float64,3);const  prvpa0=zeros(Float64,3);const  prvpk=zeros(Float64,3);const  prvps=zeros(Float64,3);const  prvpbeta=zeros(Float64,3)
+const drvdr0 = zeros(Float64,3);const  drvda0=zeros(Float64,3);const  drvdk=zeros(Float64,3);const  drvdv0=zeros(Float64,3)
+const vtmp = zeros(Float64,3);const  dvdr0 = zeros(Float64,3);const  dvda0=zeros(Float64,3);const  dvdv0=zeros(Float64,3);const  dvdk=zeros(Float64,3)
+
+
 function extrapolate_s!(n::Int64,spred::Array{Float64,2},ssave::Array{Float64,3})
 # Extrapolate s values for faster Kepler solvers:
 for i=1:n
@@ -657,6 +664,30 @@ tmp1 = 0.0; tmp2=0.0; tmp3 = 0.0; tmp4=0.0
   end
   jac_full[p,i,k,q] = tmp1
   jac_full[p,j,k,q] = tmp2
+end
+return
+end
+
+function jac_multiplyij_blas!(jac_full::Array{Float64,4},jac_ij::Array{Float64,2},i::Int64,j::Int64,nbody::Int64)
+# Multiplies the Jacobians for just the i & j components:
+jac_tmp = copy(jac_full)
+# multiply jacobian for planets i & j:
+#@inbounds for p=1:7, k=1:7, q=1:nbody
+tmp1 = 0.0; tmp2=0.0; tmp3 = 0.0; tmp4=0.0
+i1 = 1:7; i2= 8:14; i3=1:nbody
+@inbounds for k=1:7
+# Set i & j to zero so we can multiply these components:
+#  tmp1 = 0.0; tmp2=0.0
+#  @inbounds for w=1:7
+#    tmp3 = jac_tmp[w,i,k,q]
+#    tmp4 = jac_tmp[w,j,k,q]
+#    # First seven indices of jac_ij refer to planet i:
+#    tmp1 += jac_ij[  p,  w]*tmp3 + jac_ij[  p,7+w]*tmp4
+#    # Next seven indices of jac_ij refer to planet j:
+#    tmp2 += jac_ij[7+p,  w]*tmp3 + jac_ij[7+p,7+w]*tmp4
+#  end
+  jac_full[i1,i,k,i3] .= jac_ij[i1,i1]*jac_tmp[i1,i,k,i3] + jac_ij[i1,i2]*jac_tmp[i1,j,k,i3] 
+  jac_full[i1,j,k,i3] .= jac_ij[i2,i1]*jac_tmp[i1,i,k,i3] + jac_ij[i2,i2]*jac_tmp[i1,j,k,i3] 
 end
 return
 end
