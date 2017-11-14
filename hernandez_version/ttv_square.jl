@@ -501,7 +501,7 @@ for i=1:n-1
     end
     # Compute dot product of r_ij with \delta a_ij:
     fill!(dotdadq,0.0)
-    for d=1:n, p=1:4, k=1:3
+    @inbounds for d=1:n, p=1:4, k=1:3
       dotdadq[p,d] += rij[k]*(dadq[k,i,p,d]-dadq[k,j,p,d])
     end
     r2 = rij[1]*rij[1]+rij[2]*rij[2]+rij[3]*rij[3]
@@ -550,7 +550,7 @@ for i=1:n-1
       # Diagonal acceleration terms:
       fac = -fac1*r2
       # Duoh.  For dadq, have to loop over all other parameters!
-      for d=1:n
+      @inbounds for d=1:n
         indd = (d-1)*7
         for p=1:3
           jac_step[indi+3+k,indd+p] += fac*m[j]*(dadq[k,i,p,d]-dadq[k,j,p,d])
@@ -562,7 +562,7 @@ for i=1:n-1
       end
       # Now, for the final term:  (\delta a_ij . r_ij ) r_ij
       fac = 3.*fac1*rij[k]
-      for d=1:n
+      @inbounds for d=1:n
         indd = (d-1)*7
         for p=1:3
           jac_step[indi+3+k,indd+p] += fac*m[j]*dotdadq[p,d]
@@ -631,6 +631,7 @@ function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float
 h2 = 0.5*h
 alpha = alpha0
 jac_phi = zeros(Float64,7*n,7*n)
+jac_copy = zeros(Float64,7*n,7*n)
 jac_ij = zeros(Float64,14,14)
 jac_tmp1 = zeros(Float64,14,7n)
 jac_tmp2 = zeros(Float64,14,7n)
@@ -661,7 +662,7 @@ for i=1:n-1
     end
     # Carry out multiplication on the i/j components of matrix:
 #    jac_tmp2 = BLAS.gemm('N','N',jac_ij,jac_tmp1)
-    jac_tmp2 =BLAS.gemm!('N','N',1.0,jac_ij,jac_tmp1,0.0,jac_tmp2)
+    BLAS.gemm!('N','N',1.0,jac_ij,jac_tmp1,0.0,jac_tmp2)
     # Copy back to the Jacobian:
     @inbounds for k2=1:7n, k1=1:7
        jac_step[indi+k1,k2]=jac_tmp2[k1,k2]
@@ -674,7 +675,9 @@ for i=1:n-1
 end
 if alpha != 1.0
   phisalpha!(x,v,h,m,2.*(1.-alpha),n,jac_phi) # 10%
-  jac_step .= jac_phi*jac_step # < 1%
+  jac_copy .= jac_step
+#  jac_step .= jac_phi*jac_step # < 1%  Perhaps use gemm?! [ ]
+  BLAS.gemm!('N','N',1.0,jac_phi,jac_copy,0.0,jac_step)
 end
 indi=0; indj=0
 for i=n-1:-1:1
@@ -696,7 +699,7 @@ for i=n-1:-1:1
     end
     # Carry out multiplication on the i/j components of matrix:
 #    jac_tmp2 = BLAS.gemm('N','N',jac_ij,jac_tmp1)
-    jac_tmp2 =BLAS.gemm!('N','N',1.0,jac_ij,jac_tmp1,0.0,jac_tmp2)
+    BLAS.gemm!('N','N',1.0,jac_ij,jac_tmp1,0.0,jac_tmp2)
     # Copy back to the Jacobian:
     @inbounds for k2=1:7n, k1=1:7
        jac_step[indi+k1,k2]=jac_tmp2[k1,k2]
