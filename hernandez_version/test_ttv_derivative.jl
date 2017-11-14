@@ -27,19 +27,19 @@ tt3 = zeros(n,maximum(ntt))
 count = zeros(Int64,n)
 count1 = zeros(Int64,n)
 # Call the ttv function:
-dq = ttv!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
-@time dq = ttv!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
-@time dq = ttv!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
+dq = ttv_elements!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
+@time dq = ttv_elements!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
+@time dq = ttv_elements!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
 # Now call with half the timestep:
 count2 = zeros(Int64,n)
 count3 = zeros(Int64,n)
-dq = ttv!(n,t0,h/10.,tmax,elements,tt2,count2,0.0,0,0)
+dq = ttv_elements!(n,t0,h/10.,tmax,elements,tt2,count2,0.0,0,0)
 
 # Now, compute derivatives (with respect to initial cartesian positions/masses):
 dtdq0 = zeros(n,maximum(ntt),7,n)
-ttv!(n,t0,h,tmax,elements,tt,count,dtdq0)
-@time ttv!(n,t0,h,tmax,elements,tt,count,dtdq0)
-@time ttv!(n,t0,h,tmax,elements,tt,count,dtdq0)
+ttv_elements!(n,t0,h,tmax,elements,tt,count,dtdq0)
+@time ttv_elements!(n,t0,h,tmax,elements,tt,count,dtdq0)
+@time ttv_elements!(n,t0,h,tmax,elements,tt,count,dtdq0)
 read(STDIN,Char)
 
 # Check that this is working properly:
@@ -60,9 +60,9 @@ for jq=1:n
   for iq=1:7
     for inq = 1:nq
       elements2  = copy(elements)
-      dq_plus = ttv!(n,t0,h,tmax,elements2,tt2,count2,dlnq[inq],iq,jq)
+      dq_plus = ttv_elements!(n,t0,h,tmax,elements2,tt2,count2,dlnq[inq],iq,jq)
       elements3  = copy(elements)
-      dq_minus = ttv!(n,t0,h,tmax,elements3,tt3,count3,-dlnq[inq],iq,jq)
+      dq_minus = ttv_elements!(n,t0,h,tmax,elements3,tt3,count3,-dlnq[inq],iq,jq)
       for i=1:n
         for k=1:count2[i]
 #          dtdq0_num[i,k,iq,jq,inq] = (tt2[i,k]-tt1[i,k])/dq

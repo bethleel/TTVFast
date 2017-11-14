@@ -365,7 +365,18 @@ Things to do:
 4).  Check coordinates. [ ]
 5).  Finish derivatives of initial conditions. [ ]
 6).  Allow output of derivatives of coordinates at arbitrary time steps. [ ]
-7).  Have TTV call with cartesian coordinates, and write wrapper for elements. [ ]
+7).  Have TTV call with cartesian coordinates, and write wrapper for elements. [x]
 8).  Figure out derivatives of kepler_init. [ ]
 9).  Figure out derivatives of nbody_init. [ ]
 10). Write a differentiable photodynamical model. [ ]
+
+11/14/2017
+Found that using BLAS.gemm! and careful copying of matrices reduces time
+for 8-body case by another ~60%.  Now the derivatives take only a factor of 
+~8 times longer to evaluate in the 8-body case (which is for 56 free parameters!).
+So, this is ~14x faster than evaluating 2-side numerical derivatives, and
+much more accurate as well (in the 8-body case;  appears to scale with nbody).
+
+I'm ready to swap ttv_square.jl for ttv.jl, and retire ttv.jl. [x]
+
+

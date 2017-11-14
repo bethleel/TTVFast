@@ -17,115 +17,12 @@ const prvpr0 = zeros(Float64,3);const  prvpa0=zeros(Float64,3);const  prvpk=zero
 const drvdr0 = zeros(Float64,3);const  drvda0=zeros(Float64,3);const  drvdk=zeros(Float64,3);const  drvdv0=zeros(Float64,3)
 const vtmp = zeros(Float64,3);const  dvdr0 = zeros(Float64,3);const  dvda0=zeros(Float64,3);const  dvdv0=zeros(Float64,3);const  dvdk=zeros(Float64,3)
 
-
-function extrapolate_s!(n::Int64,spred::Array{Float64,2},ssave::Array{Float64,3})
-# Extrapolate s values for faster Kepler solvers:
-for i=1:n
-  for j=1:n
-    stmp = spred[i,j]
-    if spred[i,j]!= 0. && ssave[i,j,2] != 0. && ssave[i,j,1] != 0.
-      # Quadratic extrapolation from prior three steps:
-      spred[i,j] = 3.0*stmp - 3.0*ssave[i,j,1] + ssave[i,j,2]
-    end
-    ssave[i,j,2] = ssave[i,j,1]
-    ssave[i,j,1] = stmp
-  end
-end
-return
-end
-
-function ttv!(n::Int64,t0::Float64,h::Float64,tmax::Float64,elements::Array{Float64,2},tt::Array{Float64,2},count::Array{Int64,1},dtdq0::Array{Float64,4})
+# Computes TTVs as a function of orbital elements, allowing for a single log perturbation of dlnq for body jq and element iq
+function ttv_elements!(n::Int64,t0::Float64,h::Float64,tmax::Float64,elements::Array{Float64,2},tt::Array{Float64,2},count::Array{Int64,1},dlnq::Float64,iq::Int64,jq::Int64)
 #fcons = open("fcons.txt","w");
 m=zeros(Float64,n)
 x=zeros(Float64,NDIM,n)
 v=zeros(Float64,NDIM,n)
-# Save the "s" factors to extrapolate for future steps:
-# Predict values of s:
-# Fill the transit-timing & jacobian arrays with zeros:
-fill!(tt,0.0)
-fill!(dtdq0,0.0)
-# Counter for transits of each planet:
-fill!(count,0)
-for i=1:n
-  m[i] = elements[i,1]
-end
-# Initialize the N-body problem using nested hierarchy of Keplerians:
-x,v = init_nbody(elements,t0,n)
-xprior = copy(x)
-vprior = copy(v)
-# Set the time to the initial time:
-t = t0
-# Set step counter to zero:
-istep = 0
-# Jacobian for each step (7- 6 elements+mass, n_planets, 7 - 6 elements+mass, n planets):
-jac_step = zeros(Float64,7,n,7,n)
-jac_prior = zeros(Float64,7,n,7,n)
-dtdq = zeros(7,n)
-# Initialize to identity matrix:
-for i=1:7, j=1:n
-  jac_step[i,j,i,j] = 1.0
-end
-
-# Save the g function, which computes the relative sky velocity dotted with relative position
-# between the planets and star:
-gsave = zeros(Float64,n)
-# Loop over time steps:
-dt::Float64 = 0.0
-gi = 0.0
-while t < t0+tmax
-  # Carry out a phi^2 mapping step:
-#  phi2!(x,v,h,m,n)
-  dh17!(x,v,h,m,n,jac_step)
-  # Check to see if a transit may have occured.  Sky is x-y plane; line of sight is z.
-  # Star is body 1; planets are 2-nbody (note that this could be modified to see if
-  # any body transits another body):
-  for i=2:n
-    # Compute the relative sky velocity dotted with position:
-    gi = g!(i,1,x,v)
-    ri = sqrt(x[1,i]^2+x[2,i]^2+x[3,i]^2)
-    # See if sign switches, and if planet is in front of star (by a good amount):
-    if gi > 0 && gsave[i] < 0 && x[3,i] > 0.25*ri
-      # A transit has occurred between the time steps.
-      # Approximate the planet-star motion as a Keplerian, weighting over timestep:
-      count[i] += 1
-#      tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
-      dt = -gsave[i]*h/(gi-gsave[i])
-#      dt = findtransit2!(1,i,h,dt,m,xprior,vprior)
-      xtransit = copy(xprior)
-      vtransit = copy(vprior)
-      jac_transit = copy(jac_prior)
-      dt = findtransit2!(1,i,h,dt,m,xtransit,vtransit,jac_transit,dtdq)
-      tt[i,count[i]]=t+dt
-      # Save for posterity:
-      for k=1:7, p=1:n
-        dtdq0[i,count[i],k,p] = dtdq[k,p]
-      end
-      # Apply chain rule to compute Jacobian with respect to initial cartesian coordinates:
-#      for k=1:7, p=1:n, l=1:7, q=1:n
-#        dtdq0[i,count[i],k,p] += dtdq[l,q]*jac_prior[l,q,k,p]
-#      end
-    end
-    gsave[i] = gi
-  end
-  # Save the current state as prior state:
-  xprior = copy(x)
-  vprior = copy(v)
-  jac_prior = copy(jac_step)
-  # Increment time by the time step:
-  t += h
-  # Increment counter by one:
-  istep +=1
-end
-return 
-end
-
-function ttv!(n::Int64,t0::Float64,h::Float64,tmax::Float64,elements::Array{Float64,2},tt::Array{Float64,2},count::Array{Int64,1},dlnq::Float64,iq::Int64,jq::Int64)
-#fcons = open("fcons.txt","w");
-m=zeros(Float64,n)
-x=zeros(Float64,NDIM,n)
-v=zeros(Float64,NDIM,n)
-# Save the "s" factors to extrapolate for future steps:
-# Predict values of s:
 # Fill the transit-timing array with zeros:
 fill!(tt,0.0)
 # Counter for transits of each planet:
@@ -161,8 +58,106 @@ if dlnq != 0.0 && iq > 0 && iq < 7
     v[iq-3,jq] += dq
   end
 end
+ttv!(n,t0,h,tmax,m,x,v,tt,count)
+return dq
+end
+
+# Computes TTVs as a function of orbital elements, and computes Jacobian of transit times with respect to initial orbital elements. TBD [ ]
+function ttv_elements!(n::Int64,t0::Float64,h::Float64,tmax::Float64,elements::Array{Float64,2},tt::Array{Float64,2},count::Array{Int64,1},dtdq0::Array{Float64,4})
+# (At the moment dtdq0 is derivative with respect to initial x,v,m).
+m=zeros(Float64,n)
+x=zeros(Float64,NDIM,n)
+v=zeros(Float64,NDIM,n)
+# Fill the transit-timing & jacobian arrays with zeros:
+fill!(tt,0.0)
+fill!(dtdq0,0.0)
+# Counter for transits of each planet:
+fill!(count,0)
+for i=1:n
+  m[i] = elements[i,1]
+end
+# Initialize the N-body problem using nested hierarchy of Keplerians:
+#x,v = init_nbody(elements,t0,n,jac_init)
+x,v = init_nbody(elements,t0,n)
+ttv!(n,t0,h,tmax,m,x,v,tt,count,dtdq0)
+# Need to apply initial jacobian TBD [ ]
+return
+end
+
+# Computes TTVs for initial x,v, as well as timing derivatives with respect to x,v,m (dtdq0).
+function ttv!(n::Int64,t0::Float64,h::Float64,tmax::Float64,m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},tt::Array{Float64,2},count::Array{Int64,1},dtdq0::Array{Float64,4})
 xprior = copy(x)
 vprior = copy(v)
+xtransit = copy(x)
+vtransit = copy(v)
+# Set the time to the initial time:
+t = t0
+# Set step counter to zero:
+istep = 0
+# Jacobian for each step (7- 6 elements+mass, n_planets, 7 - 6 elements+mass, n planets):
+jac_prior = zeros(Float64,7*n,7*n)
+jac_transit = zeros(Float64,7*n,7*n)
+# Initialize matrix for derivatives of transit times with respect to the initial x,v,m:
+dtdq = zeros(Float64,7,n)
+# Initialize the Jacobian to the identity matrix:
+jac_step = eye(Float64,7*n)
+
+# Save the g function, which computes the relative sky velocity dotted with relative position
+# between the planets and star:
+gsave = zeros(Float64,n)
+# Loop over time steps:
+dt::Float64 = 0.0
+gi = 0.0
+while t < t0+tmax
+  # Carry out a phi^2 mapping step:
+#  phi2!(x,v,h,m,n)
+  dh17!(x,v,h,m,n,jac_step)
+  # Check to see if a transit may have occured.  Sky is x-y plane; line of sight is z.
+  # Star is body 1; planets are 2-nbody (note that this could be modified to see if
+  # any body transits another body):
+  for i=2:n
+    # Compute the relative sky velocity dotted with position:
+    gi = g!(i,1,x,v)
+    ri = sqrt(x[1,i]^2+x[2,i]^2+x[3,i]^2)
+    # See if sign switches, and if planet is in front of star (by a good amount):
+    if gi > 0 && gsave[i] < 0 && x[3,i] > 0.25*ri
+      # A transit has occurred between the time steps.
+      # Approximate the planet-star motion as a Keplerian, weighting over timestep:
+      count[i] += 1
+#      tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
+      dt = -gsave[i]*h/(gi-gsave[i])
+#      dt = findtransit2!(1,i,h,dt,m,xprior,vprior)
+      xtransit .= xprior
+      vtransit .= vprior
+      jac_transit .= jac_prior
+      dt = findtransit2!(1,i,h,dt,m,xtransit,vtransit,jac_transit,dtdq) # 20%
+      tt[i,count[i]]=t+dt
+      # Save for posterity:
+      for k=1:7, p=1:n
+        dtdq0[i,count[i],k,p] = dtdq[k,p]
+      end
+    end
+    gsave[i] = gi
+  end
+  # Save the current state as prior state:
+  xprior .= x
+  vprior .= v
+  jac_prior .= jac_step
+  # Increment time by the time step:
+  t += h
+  # Increment counter by one:
+  istep +=1
+end
+return 
+end
+
+# Computes TTVs as a function of initial x,v,m.
+function ttv!(n::Int64,t0::Float64,h::Float64,tmax::Float64,m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},tt::Array{Float64,2},count::Array{Int64,1})
+# Make some copies to allocate space for saving prior step and computing coordinates at the times of transit.
+xprior = copy(x)
+vprior = copy(v)
+xtransit = copy(x)
+vtransit = copy(v)
 # Set the time to the initial time:
 t = t0
 # Set step counter to zero:
@@ -191,8 +186,8 @@ while t < t0+tmax
       count[i] += 1
 #      tt[i,count[i]]=t+findtransit!(i,h,gi,gsave[i],m,xprior,vprior,x,v)
       dt = -gsave[i]*h/(gi-gsave[i])
-      xtransit = copy(xprior)
-      vtransit = copy(vprior)
+      xtransit .= xprior
+      vtransit .= vprior
       dt = findtransit2!(1,i,h,dt,m,xtransit,vtransit)
       tt[i,count[i]]=t+dt
 #      tt[i,count[i]]=t+findtransit2!(1,i,h,gi,gsave[i],m,xprior,vprior)
@@ -200,21 +195,17 @@ while t < t0+tmax
     gsave[i] = gi
   end
   # Save the current state as prior state:
-  for i=1:NDIM
-    for j=1:n
-      xprior[i,j]=x[i,j]
-      vprior[i,j]=v[i,j]
-    end
-  end
+  xprior .=x
+  vprior .=v
   # Increment time by the time step:
   t += h
   # Increment counter by one:
   istep +=1
 end
-return dq
+return
 end
 
-# Advances the center of mass of a binary
+# Advances the center of mass of a binary (any pair of bodies)
 function centerm!(m::Array{Float64,1},mijinv::Float64,x::Array{Float64,2},v::Array{Float64,2},vcm::Array{Float64,1},delx::Array{Float64,1},delv::Array{Float64,1},i::Int64,j::Int64,h::Float64)
 for k=1:NDIM
   x[k,i] +=  m[j]*mijinv*delx[k] + h*vcm[k]
@@ -225,7 +216,6 @@ end
 return
 end
 
-
 # Drifts bodies i & j
 function driftij!(x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64)
 for k=1:NDIM
@@ -235,17 +225,17 @@ end
 return
 end
 
-# Drifts bodies i & j
-function driftij!(x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64,jac_step::Array{Float64,4},nbody::Int64)
+# Drifts bodies i & j and computes Jacobian:
+function driftij!(x::Array{Float64,2},v::Array{Float64,2},i::Int64,j::Int64,h::Float64,jac_step::Array{Float64,2},nbody::Int64)
+indi = (i-1)*7
+indj = (j-1)*7
 for k=1:NDIM
   x[k,i] += h*v[k,i]
   x[k,j] += h*v[k,j]
   # Now for Jacobian:
-  for l=1:7
-    for m=1:nbody
-      jac_step[k,i,  l,m] += h*jac_step[3+k,i,  l,m]
-      jac_step[k,j,  l,m] += h*jac_step[3+k,j,  l,m]
-    end
+  for m=1:7*nbody
+    jac_step[indi+k,m] += h*jac_step[indi+3+k,m]
+    jac_step[indj+k,m] += h*jac_step[indj+3+k,m]
   end    
 end
 return
@@ -256,6 +246,7 @@ function keplerij!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},i
 # The state vector has: 1 time; 2-4 position; 5-7 velocity; 8 r0; 9 dr0dt; 10 beta; 11 s; 12 ds
 # Initial state:
 state0 = zeros(Float64,12)
+state0[11] = 0.0
 # Final state (after a step):
 state = zeros(Float64,12)
 delx = zeros(Float64,NDIM)
@@ -296,6 +287,7 @@ function keplerij!(m::Array{Float64,1},x::Array{Float64,2},v::Array{Float64,2},i
 # The state vector has: 1 time; 2-4 position; 5-7 velocity; 8 r0; 9 dr0dt; 10 beta; 11 s; 12 ds
 # Initial state:
 state0 = zeros(Float64,12)
+state0[11] = 0.0
 # Final state (after a step):
 state = zeros(Float64,12)
 delx = zeros(Float64,NDIM)
@@ -332,19 +324,20 @@ end
 jac_ij[ 7, 7] = 1.0  # the masses don't change with time!
 jac_ij[14,14] = 1.0
 for k=1:NDIM
-   jac_ij[   k,   k] +=   mi
-   jac_ij[   k, 3+k] += h*mi
-   jac_ij[   k, 7+k] +=   mj
-   jac_ij[   k,10+k] += h*mj
-   jac_ij[ 3+k, 3+k] +=   mi
-   jac_ij[ 3+k,10+k] +=   mj
-   jac_ij[ 7+k,   k] +=   mi
-   jac_ij[ 7+k, 3+k] += h*mi
-   jac_ij[ 7+k, 7+k] +=   mj
-   jac_ij[ 7+k,10+k] += h*mj
-   jac_ij[10+k, 3+k] +=   mi
-   jac_ij[10+k,10+k] +=   mj
-   for l=1:NDIM
+   jac_ij[   k,   k] =   mi
+   jac_ij[   k, 3+k] = h*mi
+   jac_ij[   k, 7+k] =   mj
+   jac_ij[   k,10+k] = h*mj
+   jac_ij[ 3+k, 3+k] =   mi
+   jac_ij[ 3+k,10+k] =   mj
+   jac_ij[ 7+k,   k] =   mi
+   jac_ij[ 7+k, 3+k] = h*mi
+   jac_ij[ 7+k, 7+k] =   mj
+   jac_ij[ 7+k,10+k] = h*mj
+   jac_ij[10+k, 3+k] =   mi
+   jac_ij[10+k,10+k] =   mj
+end
+for l=1:NDIM, k=1:NDIM
 # Compute derivatives of \delta x_i with respect to initial conditions:
      jac_ij[   k,   l] += mj*jac_kepler[  k,  l]
      jac_ij[   k, 3+l] += mj*jac_kepler[  k,3+l]
@@ -365,19 +358,20 @@ for k=1:NDIM
      jac_ij[10+k, 3+l] -= mi*jac_kepler[3+k,3+l]
      jac_ij[10+k, 7+l] += mi*jac_kepler[3+k,  l]
      jac_ij[10+k,10+l] += mi*jac_kepler[3+k,3+l]
-   end
+end
+for k=1:NDIM
 # Compute derivatives of \delta x_i with respect to the masses:
-   jac_ij[   k, 7] += (x[k,i]+h*v[k,i]-xcm[k]-h*vcm[k]-mj*state[1+k])*mijinv + GNEWT*mj*jac_kepler[  k,7]
-   jac_ij[   k,14] += (x[k,j]+h*v[k,j]-xcm[k]-h*vcm[k]+mi*state[1+k])*mijinv + GNEWT*mj*jac_kepler[  k,7]
+   jac_ij[   k, 7] = (x[k,i]+h*v[k,i]-xcm[k]-h*vcm[k]-mj*state[1+k])*mijinv + GNEWT*mj*jac_kepler[  k,7]
+   jac_ij[   k,14] = (x[k,j]+h*v[k,j]-xcm[k]-h*vcm[k]+mi*state[1+k])*mijinv + GNEWT*mj*jac_kepler[  k,7]
 # Compute derivatives of \delta v_i with respect to the masses:
-   jac_ij[ 3+k, 7] += (v[k,i]-vcm[k]-mj*state[4+k])*mijinv + GNEWT*mj*jac_kepler[3+k,7]
-   jac_ij[ 3+k,14] += (v[k,j]-vcm[k]+mi*state[4+k])*mijinv + GNEWT*mj*jac_kepler[3+k,7]
+   jac_ij[ 3+k, 7] = (v[k,i]-vcm[k]-mj*state[4+k])*mijinv + GNEWT*mj*jac_kepler[3+k,7]
+   jac_ij[ 3+k,14] = (v[k,j]-vcm[k]+mi*state[4+k])*mijinv + GNEWT*mj*jac_kepler[3+k,7]
 # Compute derivatives of \delta x_j with respect to the masses:
-   jac_ij[ 7+k, 7] += (x[k,i]+h*v[k,i]-xcm[k]-h*vcm[k]-mj*state[1+k])*mijinv - GNEWT*mi*jac_kepler[  k,7]
-   jac_ij[ 7+k,14] += (x[k,j]+h*v[k,j]-xcm[k]-h*vcm[k]+mi*state[1+k])*mijinv - GNEWT*mi*jac_kepler[  k,7]
+   jac_ij[ 7+k, 7] = (x[k,i]+h*v[k,i]-xcm[k]-h*vcm[k]-mj*state[1+k])*mijinv - GNEWT*mi*jac_kepler[  k,7]
+   jac_ij[ 7+k,14] = (x[k,j]+h*v[k,j]-xcm[k]-h*vcm[k]+mi*state[1+k])*mijinv - GNEWT*mi*jac_kepler[  k,7]
 # Compute derivatives of \delta v_j with respect to the masses:
-   jac_ij[10+k, 7] += (v[k,i]-vcm[k]-mj*state[4+k])*mijinv - GNEWT*mi*jac_kepler[3+k,7]
-   jac_ij[10+k,14] += (v[k,j]-vcm[k]+mi*state[4+k])*mijinv - GNEWT*mi*jac_kepler[3+k,7]
+   jac_ij[10+k, 7] = (v[k,i]-vcm[k]-mj*state[4+k])*mijinv - GNEWT*mi*jac_kepler[3+k,7]
+   jac_ij[10+k,14] = (v[k,j]-vcm[k]+mi*state[4+k])*mijinv - GNEWT*mi*jac_kepler[3+k,7]
 end
 # Advance center of mass & individual Keplerian motions:
 centerm!(m,mijinv,x,v,vcm,delx,delv,i,j,h)
@@ -386,24 +380,22 @@ end
 
 # Drifts all particles:
 function drift!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,n::Int64)
-for i=1:n
-  for j=1:NDIM
-    x[j,i] += h*v[j,i]
-  end
+@inbounds for i=1:n, j=1:NDIM
+  x[j,i] += h*v[j,i]
 end
 return
 end
 
 # Drifts all particles:
-function drift!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,n::Int64,jac_step::Array{Float64,4})
-for i=1:n
+function drift!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,n::Int64,jac_step::Array{Float64,2})
+indi = 0
+@inbounds for i=1:n
+  indi = (i-1)*7
   for j=1:NDIM
     x[j,i] += h*v[j,i]
     # Now for Jacobian:
-    for k=1:7
-      for q=1:n
-        jac_step[j,i,k,q] += h*jac_step[3+j,i,k,q]
-      end    
+    for k=1:7*n
+      jac_step[indi+j,k] += h*jac_step[indi+3+j,k]
     end    
   end
 end
@@ -419,7 +411,7 @@ rij = zeros(Float64,3)
 aij = zeros(Float64,3)
 coeff = alpha*h^3/96*2*GNEWT
 fac = 0.0; fac1 = 0.0; fac2 = 0.0; r1 = 0.0; r2 = 0.0; r3 = 0.0
-for i=1:n
+@inbounds for i=1:n
   for j = i+1:n
     for k=1:3
       rij[k] = x[k,i] - x[k,j]
@@ -435,7 +427,7 @@ for i=1:n
 end
 # Next, compute \tilde g_i acceleration vector (this is rewritten
 # slightly to avoid reference to \tilde a_i):
-for i=1:n
+@inbounds for i=1:n
   for j=i+1:n
     for k=1:3
       aij[k] = a[k,i] - a[k,j]
@@ -458,7 +450,7 @@ end
 return
 end
 
-function phisalpha!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},alpha::Float64,n::Int64,jac_step::Array{Float64,4})
+function phisalpha!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},alpha::Float64,n::Int64,jac_step::Array{Float64,2})
 # Computes the 4th-order correction:
 #function [v] = phisalpha(x,v,h,m,alpha)
 #n = size(m,2);
@@ -469,7 +461,7 @@ rij = zeros(Float64,3)
 aij = zeros(Float64,3)
 coeff = alpha*h^3/96*2*GNEWT
 fac = 0.0; fac1 = 0.0; fac2 = 0.0; fac3 = 0.0; r1 = 0.0; r2 = 0.0; r3 = 0.0
-for i=1:n-1
+@inbounds for i=1:n-1
   for j = i+1:n
     for k=1:3
       rij[k] = x[k,i] - x[k,j]
@@ -503,15 +495,16 @@ for i=1:n-1
     end
   end
 end
-# Delete this when finished debugging:
-#fill!(dadq,0.0)
 # Next, compute \tilde g_i acceleration vector (this is rewritten
 # slightly to avoid reference to \tilde a_i):
 fill!(jac_step,0.0)
-# Note that jac_step[k,i,p,j] is the derivative of the kth coordinate
+# Note that jac_step[(i-1)*7+k,(j-1)*7+p] is the derivative of the kth coordinate
 # of planet i with respect to the pth coordinate of planet j.
-for i=1:n-1
+indi = 0; indj=0; indd = 0
+@inbounds for i=1:n-1
+  indi = (i-1)*7
   for j=i+1:n
+    indj = (j-1)*7
     for k=1:3
       aij[k] = a[k,i] - a[k,j]
 #      aij[k] = 0.0
@@ -519,12 +512,8 @@ for i=1:n-1
     end
     # Compute dot product of r_ij with \delta a_ij:
     fill!(dotdadq,0.0)
-    for p=1:4
-      for d=1:n
-        for k=1:3
-          dotdadq[p,d] += rij[k]*(dadq[k,i,p,d]-dadq[k,j,p,d])
-        end
-      end
+    @inbounds for d=1:n, p=1:4, k=1:3
+      dotdadq[p,d] += rij[k]*(dadq[k,i,p,d]-dadq[k,j,p,d])
     end
     r2 = rij[1]*rij[1]+rij[2]*rij[2]+rij[3]*rij[3]
     r1 = sqrt(r2)
@@ -537,77 +526,80 @@ for i=1:n-1
       v[k,i] += m[j]*fac
       v[k,j] -= m[i]*fac
       # Mass derivative (first part is easy):
-      jac_step[3+k,i,7,j] += fac
-      jac_step[3+k,j,7,i] -= fac
+      jac_step[indi+3+k,indj+7] += fac
+      jac_step[indj+3+k,indi+7] -= fac
       # Position derivatives:
       fac *= 5.0/r2
       for p=1:3
-        jac_step[3+k,i,p,i] -= fac*m[j]*rij[p]
-        jac_step[3+k,i,p,j] += fac*m[j]*rij[p]
-        jac_step[3+k,j,p,j] -= fac*m[i]*rij[p]
-        jac_step[3+k,j,p,i] += fac*m[i]*rij[p]
+        jac_step[indi+3+k,indi+p] -= fac*m[j]*rij[p]
+        jac_step[indi+3+k,indj+p] += fac*m[j]*rij[p]
+        jac_step[indj+3+k,indj+p] -= fac*m[i]*rij[p]
+        jac_step[indj+3+k,indi+p] += fac*m[i]*rij[p]
       end
       # Second mass derivative:
       fac = 2*GNEWT*fac1*rij[k]/r1
-      jac_step[3+k,i,7,i] += fac*m[j]
-      jac_step[3+k,i,7,j] += fac*m[j]
-      jac_step[3+k,j,7,j] -= fac*m[i]
-      jac_step[3+k,j,7,i] -= fac*m[i]
+      jac_step[indi+3+k,indi+7] += fac*m[j]
+      jac_step[indi+3+k,indj+7] += fac*m[j]
+      jac_step[indj+3+k,indj+7] -= fac*m[i]
+      jac_step[indj+3+k,indi+7] -= fac*m[i]
       #  (There's also a mass term in dadq [x]. See below.)
       # Diagonal position terms:
       fac = fac1*fac2
-      jac_step[3+k,i,k,i] += fac*m[j]
-      jac_step[3+k,i,k,j] -= fac*m[j]
-      jac_step[3+k,j,k,j] += fac*m[i]
-      jac_step[3+k,j,k,i] -= fac*m[i]
+      jac_step[indi+3+k,indi+k] += fac*m[j]
+      jac_step[indi+3+k,indj+k] -= fac*m[j]
+      jac_step[indj+3+k,indj+k] += fac*m[i]
+      jac_step[indj+3+k,indi+k] -= fac*m[i]
       # Dot product \delta rij terms:
       fac = -2*fac1*(rij[k]*GNEWT*(m[i]+m[j])/(r2*r1)+aij[k])
       for p=1:3
         fac3 = fac*rij[p] + fac1*3.0*rij[k]*aij[p]
-        jac_step[3+k,i,p,i] += m[j]*fac3
-        jac_step[3+k,i,p,j] -= m[j]*fac3
-        jac_step[3+k,j,p,j] += m[i]*fac3
-        jac_step[3+k,j,p,i] -= m[i]*fac3
+        jac_step[indi+3+k,indi+p] += m[j]*fac3
+        jac_step[indi+3+k,indj+p] -= m[j]*fac3
+        jac_step[indj+3+k,indj+p] += m[i]*fac3
+        jac_step[indj+3+k,indi+p] -= m[i]*fac3
       end
       # Diagonal acceleration terms:
       fac = -fac1*r2
       # Duoh.  For dadq, have to loop over all other parameters!
-      for d=1:n
+      @inbounds for d=1:n
+        indd = (d-1)*7
         for p=1:3
-          jac_step[3+k,i,p,d] += fac*m[j]*(dadq[k,i,p,d]-dadq[k,j,p,d])
-          jac_step[3+k,j,p,d] -= fac*m[i]*(dadq[k,i,p,d]-dadq[k,j,p,d])
+          jac_step[indi+3+k,indd+p] += fac*m[j]*(dadq[k,i,p,d]-dadq[k,j,p,d])
+          jac_step[indj+3+k,indd+p] -= fac*m[i]*(dadq[k,i,p,d]-dadq[k,j,p,d])
         end
         # Don't forget mass-dependent term:
-        jac_step[3+k,i,7,d] += fac*m[j]*(dadq[k,i,4,d]-dadq[k,j,4,d])
-        jac_step[3+k,j,7,d] -= fac*m[i]*(dadq[k,i,4,d]-dadq[k,j,4,d])
+        jac_step[indi+3+k,indd+7] += fac*m[j]*(dadq[k,i,4,d]-dadq[k,j,4,d])
+        jac_step[indj+3+k,indd+7] -= fac*m[i]*(dadq[k,i,4,d]-dadq[k,j,4,d])
       end
-      # Now, for the hardest term:  (\delta a_ij . r_ij ) r_ij [ ]
+      # Now, for the final term:  (\delta a_ij . r_ij ) r_ij
       fac = 3.*fac1*rij[k]
-      for d=1:n
+      @inbounds for d=1:n
+        indd = (d-1)*7
         for p=1:3
-          jac_step[3+k,i,p,d] += fac*m[j]*dotdadq[p,d]
-          jac_step[3+k,j,p,d] -= fac*m[i]*dotdadq[p,d]
+          jac_step[indi+3+k,indd+p] += fac*m[j]*dotdadq[p,d]
+          jac_step[indj+3+k,indd+p] -= fac*m[i]*dotdadq[p,d]
         end
-        jac_step[3+k,i,7,d] += fac*m[j]*dotdadq[4,d]
-        jac_step[3+k,j,7,d] -= fac*m[i]*dotdadq[4,d]
+        jac_step[indi+3+k,indd+7] += fac*m[j]*dotdadq[4,d]
+        jac_step[indj+3+k,indd+7] -= fac*m[i]*dotdadq[4,d]
       end
     end
   end
 end
-for i=1:n
+@inbounds for i=1:n
+  indi = (i-1)*7
   for k=1:3
   # Position remains unchanged, so Jacobian of position should be identity matrix:
-    jac_step[  k,i,  k,i] += 1.0
+    jac_step[indi+  k,indi+  k] += 1.0
   # Jacobian of velocity has linear dependence on initial velocity
-    jac_step[3+k,i,3+k,i] += 1.0
+    jac_step[indi+3+k,indi+3+k] += 1.0
   end
   # Mass remains unchanged:
-  jac_step[7,i,7,i] += 1.0
+  jac_step[indi+7,indi+7] += 1.0
 end
 return
 end
 
-# Carries out the DH17 mapping
+# Carries out the DH17 mapping:
 function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64)
 alpha = alpha0
 h2 = 0.5*h
@@ -616,7 +608,7 @@ if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n)
 end
 drift!(x,v,h2,n)
-for i=1:n-1
+@inbounds for i=1:n-1
   for j=i+1:n
     driftij!(x,v,i,j,-h2)
     keplerij!(m,x,v,i,j,h2)
@@ -645,250 +637,101 @@ g = (x[1,j]-x[1,i])*(v[1,j]-v[1,i])+(x[2,j]-x[2,i])*(v[2,j]-v[2,i])
 return g
 end
 
-function jac_multiplyij!(jac_full::Array{Float64,4},jac_ij::Array{Float64,2},i::Int64,j::Int64,nbody::Int64)
-# Multiplies the Jacobians for just the i & j components:
-jac_tmp = copy(jac_full)
-# multiply jacobian for planets i & j:
-#@inbounds for p=1:7, k=1:7, q=1:nbody
-tmp1 = 0.0; tmp2=0.0; tmp3 = 0.0; tmp4=0.0
-@inbounds for q=1:nbody, k=1:7, p=1:7
-# Set i & j to zero so we can multiply these components:
-  tmp1 = 0.0; tmp2=0.0
-  @inbounds for w=1:7
-    tmp3 = jac_tmp[w,i,k,q]
-    tmp4 = jac_tmp[w,j,k,q]
-    # First seven indices of jac_ij refer to planet i:
-    tmp1 += jac_ij[  p,  w]*tmp3 + jac_ij[  p,7+w]*tmp4
-    # Next seven indices of jac_ij refer to planet j:
-    tmp2 += jac_ij[7+p,  w]*tmp3 + jac_ij[7+p,7+w]*tmp4
-  end
-  jac_full[p,i,k,q] = tmp1
-  jac_full[p,j,k,q] = tmp2
-end
-return
-end
-
-function jac_multiplyij_blas!(jac_full::Array{Float64,4},jac_ij::Array{Float64,2},i::Int64,j::Int64,nbody::Int64)
-# Multiplies the Jacobians for just the i & j components:
-jac_tmp = copy(jac_full)
-# multiply jacobian for planets i & j:
-#@inbounds for p=1:7, k=1:7, q=1:nbody
-tmp1 = 0.0; tmp2=0.0; tmp3 = 0.0; tmp4=0.0
-i1 = 1:7; i2= 8:14; i3=1:nbody
-@inbounds for k=1:7
-# Set i & j to zero so we can multiply these components:
-#  tmp1 = 0.0; tmp2=0.0
-#  @inbounds for w=1:7
-#    tmp3 = jac_tmp[w,i,k,q]
-#    tmp4 = jac_tmp[w,j,k,q]
-#    # First seven indices of jac_ij refer to planet i:
-#    tmp1 += jac_ij[  p,  w]*tmp3 + jac_ij[  p,7+w]*tmp4
-#    # Next seven indices of jac_ij refer to planet j:
-#    tmp2 += jac_ij[7+p,  w]*tmp3 + jac_ij[7+p,7+w]*tmp4
-#  end
-  jac_full[i1,i,k,i3] .= jac_ij[i1,i1]*jac_tmp[i1,i,k,i3] + jac_ij[i1,i2]*jac_tmp[i1,j,k,i3] 
-  jac_full[i1,j,k,i3] .= jac_ij[i2,i1]*jac_tmp[i1,i,k,i3] + jac_ij[i2,i2]*jac_tmp[i1,j,k,i3] 
-end
-return
-end
-
-function jac_multiplyij_dot!(jac_full::Array{Float64,4},jac_ij::Array{Float64,2},i::Int64,j::Int64,nbody::Int64)
-# Multiplies the Jacobians for just the i & j components:
-jac_tmp = copy(jac_full)
-# multiply jacobian for planets i & j:
-#@inbounds for p=1:7, k=1:7, q=1:nbody
-tmp1 = 0.0; tmp2=0.0; tmp3 = 0.0; tmp4=0.0
-@inbounds for q=1:nbody, k=1:7, p=1:7
-  jac_full[p,i,k,q] = dot(jac_ij[  p, 1:7],jac_tmp[1:7,i,k,q])+ dot(jac_ij[  p,8:14],jac_tmp[1:7,j,k,q])
-  jac_full[p,j,k,q] = dot(jac_ij[7+p, 1:7],jac_tmp[1:7,i,k,q])+ dot(jac_ij[7+p,8:14],jac_tmp[1:7,j,k,q])
-end
-return
-end
-
-
-function jac_multiply!(jac_full::Array{Float64,4},jac_step::Array{Float64,4},nbody::Int64)
-# Multiplies the Jacobians
-jac_tmp = copy(jac_full)
-fill!(jac_full,0.0)
-# multiply jacobian
-#for j=1:nbody, i=1:7, l=1:nbody, k=1:7, n=1:nbody, w=1:7
-tmp1 = 0.0
-@inbounds for l=1:nbody, k=1:7, j=1:nbody, i=1:7
-  tmp1 = 0.0
-  @inbounds for n=1:nbody, w=1:7
-    tmp1 += jac_step[i,j,w,n]*jac_tmp[w,n,k,l]
-  end
-  jac_full[i,j,k,l] = tmp1
-end
-return
-end
-
-# Carries out the DH17 mapping & computes the jacobian:
-function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,jac_step::Array{Float64,4})
+# Carries out the DH17 mapping & computes the Jacobian:
+function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,jac_step::Array{Float64,2})
 h2 = 0.5*h
-alpha = alpha0
-jac_phi = zeros(Float64,7,n,7,n)
+alpha = alpha0; sevn = 7*n
+jac_phi = zeros(Float64,sevn,sevn)
+jac_copy = zeros(Float64,sevn,sevn)
+jac_ij = zeros(Float64,14,14)
+jac_tmp1 = zeros(Float64,14,sevn)
+jac_tmp2 = zeros(Float64,14,sevn)
 # alpha = 0. is similar in precision to alpha=0.25
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n,jac_phi)
-  jac_multiply!(jac_step,jac_phi,n)
+  jac_step .= jac_phi*jac_step # < 1%
 end
 drift!(x,v,h2,n,jac_step)
-jac_ij = zeros(Float64,14,14)
-for i=1:n-1
+indi = 0:1; indj = 0:1
+i2 = 1:sevn
+@inbounds for i=1:n-1
+#  indi = 7i-6:7i
+  indi = (i-1)*7
   for j=i+1:n
+#    indj = 7j-6:7j
+    indj = (j-1)*7
     driftij!(x,v,i,j,-h2,jac_step,n)
-    keplerij!(m,x,v,i,j,h2,jac_ij)
-    jac_multiplyij!(jac_step,jac_ij,i,j,n)
+    keplerij!(m,x,v,i,j,h2,jac_ij) # 21%
+    # Pick out indices for bodies i & j:
+#    i1 = [indi;indj]
+#    jac_step[i1,i2] = *(jac_ij,jac_step[i1,i2])
+    @inbounds for k2=1:sevn, k1=1:7
+      jac_tmp1[k1,k2] = jac_step[indi+k1,k2]
+    end
+    @inbounds for k2=1:sevn, k1=1:7
+      jac_tmp1[7+k1,k2] = jac_step[indj+k1,k2]
+    end
+    # Carry out multiplication on the i/j components of matrix:
+#    jac_tmp2 = BLAS.gemm('N','N',jac_ij,jac_tmp1)
+    BLAS.gemm!('N','N',1.0,jac_ij,jac_tmp1,0.0,jac_tmp2)
+    # Copy back to the Jacobian:
+    @inbounds for k2=1:sevn, k1=1:7
+       jac_step[indi+k1,k2]=jac_tmp2[k1,k2]
+    end
+    @inbounds for k2=1:sevn, k1=1:7
+      jac_step[indj+k1,k2]=jac_tmp2[7+k1,k2]
+    end
+#    jac_step[i1,i2] =jac_tmp
   end
 end
 if alpha != 1.0
-  phisalpha!(x,v,h,m,2.*(1.-alpha),n,jac_phi)
-  jac_multiply!(jac_step,jac_phi,n)
+  phisalpha!(x,v,h,m,2.*(1.-alpha),n,jac_phi) # 10%
+  @inbounds for i in eachindex(jac_step)
+    jac_copy[i] = jac_step[i]
+  end
+#  jac_step .= jac_phi*jac_step # < 1%  Perhaps use gemm?! [ ]
+  BLAS.gemm!('N','N',1.0,jac_phi,jac_copy,0.0,jac_step)
 end
+indi=0; indj=0
 for i=n-1:-1:1
+#  indi=7i-6:7i
+  indi=(i-1)*7
   for j=n:-1:i+1
-    keplerij!(m,x,v,i,j,h2,jac_ij)
-    jac_multiplyij!(jac_step,jac_ij,i,j,n)
-    driftij!(x,v,i,j,-h2,jac_step,n)
+#    indj=7j-6:7j
+    indj=(j-1)*7
+    keplerij!(m,x,v,i,j,h2,jac_ij) # 23%
+    # Pick out indices for bodies i & j:
+#    i1 = [indi;indj]
+    # Carry out multiplication on the i/j components of matrix:
+#    jac_step[i1,i2] = *(jac_ij,jac_step[i1,i2])
+    @inbounds for k2=1:sevn, k1=1:7
+      jac_tmp1[k1,k2] = jac_step[indi+k1,k2]
+    end
+    @inbounds for k2=1:sevn, k1=1:7
+      jac_tmp1[7+k1,k2] = jac_step[indj+k1,k2]
+    end
+    # Carry out multiplication on the i/j components of matrix:
+#    jac_tmp2 = BLAS.gemm('N','N',jac_ij,jac_tmp1)
+    BLAS.gemm!('N','N',1.0,jac_ij,jac_tmp1,0.0,jac_tmp2)
+    # Copy back to the Jacobian:
+    @inbounds for k2=1:sevn, k1=1:7
+       jac_step[indi+k1,k2]=jac_tmp2[k1,k2]
+    end
+    @inbounds for k2=1:sevn, k1=1:7
+      jac_step[indj+k1,k2]=jac_tmp2[7+k1,k2]
+    end
+    driftij!(x,v,i,j,-h2,jac_step,n) 
   end
 end
 drift!(x,v,h2,n,jac_step)
 if alpha != 0.0
   phisalpha!(x,v,h,m,alpha,n,jac_phi)
-  jac_multiply!(jac_step,jac_phi,n)
+  jac_step .= jac_phi*jac_step # < 1%
 end
 return
 end
 
-function findtransit!(i,h,g1,g2,m,x1,v1,x2,v2)
-# Computes the transit time, approximating the motion
-# as a Keplerian forward & backward in time, weighted by location in the timestep.
-# Initial guess using linear interpolation:
-tt = -g1*h/(g2-g1)
-dt = 1.0
-
-# Setup state vectors for kepler_step:
-s10 = zeros(Float64,12)
-s20 = zeros(Float64,12)
-# Final state (after a step):
-s1 = zeros(Float64,12)
-s2 = zeros(Float64,12)
-s = zeros(Float64,12)
-for k=1:NDIM
-  s10[1+k     ] = x1[k,i] - x1[k,1]
-  s10[1+k+NDIM] = v1[k,i] - v1[k,1]
-  s20[1+k     ] = x2[k,i] - x2[k,1]
-  s20[1+k+NDIM] = v2[k,i] - v2[k,1]
-end
-gm = GNEWT*(m[i]+m[1])
-iter = 0
-accel1= 0.
-accel2= 0.
-accel = zeros(Float64,3)
-while abs(dt) > 1e-8 && iter < 20
-  # Advance planet state at start of step to estimated transit time:
-  kepler_step!(gm,    tt, s10, s1)
-  # Reverse planet state at end of step to estimated transit time:
-  kepler_step!(gm, -h+tt, s20, s2)
-  # Weight:
-  w = tt/h
-  # Compute weighting of states:
-  for j=2:7
-    s[j] = (1.0-w)*s1[j]+w*s2[j]
-  end
-  # Compute time offset:
-  g = s[2]*s[5]+s[3]*s[6]
-  # Compute gravitational acceleration
-  r1_3 = norm(s1[2:4])^3
-  r2_3 = norm(s2[2:4])^3
-  for k=1:3
-    accel1 = -gm*s1[k+1]/r1_3
-    accel2 = -gm*s2[k+1]/r2_3
-    accel[k] = accel1*(1.0-w)+accel2*w
-  end
-  # Compute derivative of g with respect to time:
-  gdot = s[5]^2+s[6]^2+s[2]*accel[1]+s[3]*accel[2]
-  # Include time derivatives of interpolation (10/4/17 notes):
-  gdot += ((s2[2]-s1[2])*s[5] + (s2[5]-s1[5])*s[2] +(s2[3]-s1[3])*s[6]+(s2[6]-s1[6])*s[3])/h
-  # Refine estimate of transit time with Newton's method:
-  dt = -g/gdot
-  # Add refinement to estimated time:
-  tt += dt
-  iter +=1
-end
-# Note: this is the time elapsed *after* the beginning of the timestep:
-return tt
-end
-
-function findtransit!(i,h,g1,g2,m,x1,v1,x2,v2,dtdqn)
-# Computes the transit time, approximating the motion
-# as a Keplerian forward & backward in time, weighted by location in the timestep.
-# Initial guess using linear interpolation:
-tt = -g1*h/(g2-g1)
-dt = 1.0
-
-# Vector for computing derivative with respect to the initial and final elements
-# of the planet & star -  2 planets with 7 elements/masses at two times (initial & final):
-dtdqn = zeros(7,2,2)
-
-# Setup state vectors for kepler_step:
-s10 = zeros(Float64,12)
-s20 = zeros(Float64,12)
-# Final state (after a step):
-s1 = zeros(Float64,12)
-s2 = zeros(Float64,12)
-s = zeros(Float64,12)
-for k=1:NDIM
-  s10[1+k     ] = x1[k,i] - x1[k,1]
-  s10[1+k+NDIM] = v1[k,i] - v1[k,1]
-  s20[1+k     ] = x2[k,i] - x2[k,1]
-  s20[1+k+NDIM] = v2[k,i] - v2[k,1]
-end
-gm = GNEWT*(m[i]+m[1])
-iter = 0
-accel1= 0.
-accel2= 0.
-accel = zeros(Float64,3)
-while abs(dt) > 1e-8 && iter < 20
-  # Advance planet state at start of step to estimated transit time:
-  kepler_step!(gm,    tt, s10, s1)
-  # Reverse planet state at end of step to estimated transit time:
-  kepler_step!(gm, -h+tt, s20, s2)
-  # Weight:
-  w = tt/h
-  # Compute weighting of states:
-  for j=2:7
-    s[j] = (1.0-w)*s1[j]+w*s2[j]
-  end
-  # Compute time offset:
-  g = s[2]*s[5]+s[3]*s[6]
-  # Compute gravitational acceleration
-  r1_3 = norm(s1[2:4])^3
-  r2_3 = norm(s2[2:4])^3
-  for k=1:3
-    accel1 = -gm*s1[k+1]/r1_3
-    accel2 = -gm*s2[k+1]/r2_3
-    accel[k] = accel1*(1.0-w)+accel2*w
-  end
-  # Compute derivative of g with respect to time:
-  gdot = s[5]^2+s[6]^2+s[2]*accel[1]+s[3]*accel[2]
-  # Include time derivatives of interpolation (10/4/17 notes):
-  gdot += ((s2[2]-s1[2])*s[5] + (s2[5]-s1[5])*s[2] +(s2[3]-s1[3])*s[6]+(s2[6]-s1[6])*s[3])/h
-  # Refine estimate of transit time with Newton's method:
-  dt = -g/gdot
-  # Add refinement to estimated time:
-  tt += dt
-  iter +=1
-end
-# Now compute derivative of transit time with respect to initial (& final)
-# positions & masses of the planet/star:
-
-
-# Note: this is the time elapsed *after* the beginning of the timestep:
-return tt
-end
-
+# Finds the transit by taking a partial dh17 step from prior times step:
 function findtransit2!(i::Int64,j::Int64,h::Float64,tt::Float64,m::Array{Float64,1},x1::Array{Float64,2},v1::Array{Float64,2})
 # Computes the transit time, approximating the motion as a fraction of a DH17 step forward in time.
 # Initial guess using linear interpolation:
@@ -899,8 +742,8 @@ gdot = 0.0
 x = copy(x1)
 v = copy(v1)
 while abs(dt) > 1e-8 && iter < 20
-  x = copy(x1)
-  v = copy(v1)
+  x .= x1
+  v .= v1
   # Advance planet state at start of step to estimated transit time:
   dh17!(x,v,tt,m,n)
   # Compute time offset:
@@ -925,13 +768,12 @@ while abs(dt) > 1e-8 && iter < 20
   tt += dt
   iter +=1
 end
-# Compute derivatives:
-#  dh17!(x,v,tt,m,n,jac_step)
 # Note: this is the time elapsed *after* the beginning of the timestep:
 return tt::Float64
 end
 
-function findtransit2!(i::Int64,j::Int64,h::Float64,tt::Float64,m::Array{Float64,1},x1::Array{Float64,2},v1::Array{Float64,2},jac_step::Array{Float64,4},dtdq::Array{Float64,2})
+# Finds the transit by taking a partial dh17 step from prior times step, computes timing Jacobian, dtdq, wrt initial cartesian coordinates, masses:
+function findtransit2!(i::Int64,j::Int64,h::Float64,tt::Float64,m::Array{Float64,1},x1::Array{Float64,2},v1::Array{Float64,2},jac_step::Array{Float64,2},dtdq::Array{Float64,2})
 # Computes the transit time, approximating the motion as a fraction of a DH17 step forward in time.
 # Also computes the Jacobian of the transit time with respect to the initial parameters, dtdq[7,n].
 # Initial guess using linear interpolation:
@@ -942,8 +784,8 @@ gdot = 0.0
 x = copy(x1)
 v = copy(v1)
 while abs(dt) > 1e-8 && iter < 20
-  x = copy(x1)
-  v = copy(v1)
+  x .= x1
+  v .= v1
   # Advance planet state at start of step to estimated transit time:
   dh17!(x,v,tt,m,n)
   # Compute time offset:
@@ -991,11 +833,14 @@ end
 gdot += (v[1,j]-v[1,i])^2+(v[2,j]-v[2,i])^2
 # Set dtdq to zero:
 fill!(dtdq,0.0)
-for k=1:7
-  for p=1:n
+indj = (j-1)*7+1
+indi = (i-1)*7+1
+for p=1:n
+  indp = (p-1)*7
+  for k=1:7
     # Compute derivatives:
-    dtdq[k,p] = -((jac_step[1,j,k,p]-jac_step[1,i,k,p])*(v[1,j]-v[1,i])+(jac_step[2,j,k,p]-jac_step[2,i,k,p])*(v[2,j]-v[2,i])+
-                  (jac_step[4,j,k,p]-jac_step[4,i,k,p])*(x[1,j]-x[1,i])+(jac_step[5,j,k,p]-jac_step[5,i,k,p])*(x[2,j]-x[2,i]))/gdot
+    dtdq[k,p] = -((jac_step[indj,indp+k]-jac_step[indi,indp+k])*(v[1,j]-v[1,i])+(jac_step[indj+1,indp+k]-jac_step[indi+1,indp+k])*(v[2,j]-v[2,i])+
+                  (jac_step[indj+3,indp+k]-jac_step[indi+3,indp+k])*(x[1,j]-x[1,i])+(jac_step[indj+4,indp+k]-jac_step[indi+4,indp+k])*(x[2,j]-x[2,i]))/gdot
   end
 end
 # Note: this is the time elapsed *after* the beginning of the timestep:
