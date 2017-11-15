@@ -359,7 +359,8 @@ slow...
 
 11/13/2017
 Things to do:
-1).  Generalize for inclined planets. [ ]
+1).  Generalize for inclined planets. [x] (I generalized kepler_init).
+ 1b). Check that initial t0 & P gives correct ephemeris in 2-body (Kepler) case. [ ]
 2).  Generalize for arbitrary mobile diagram.  [ ]
 3).  Compare with rebound. [ ]
 4).  Check coordinates. [ ]

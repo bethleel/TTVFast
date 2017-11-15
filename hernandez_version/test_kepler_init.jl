@@ -8,7 +8,7 @@ include("kepler_init.jl")
 t0 = 2.4
 mass = 1.0
 period = 1.5
-elements = [1.5,rand()*period,.1*randn(),0.1*randn()]
+elements = [1.5,rand()*period,.1*randn(),0.1*randn(),pi/2,pi]
 ecc = sqrt(elements[3]^2+elements[4]^2)
 ntime = 10000
 time = linspace(t0,t0+period,ntime)
@@ -18,6 +18,11 @@ vfvec = zeros(3,ntime)
 dt = 1e-8
 for i=1:ntime
   x,v = kepler_init(time[i],mass,elements)
+  if i==1 
+    x_ekep,v_ekep = kepler_init_ekep(time[i],mass,elements)
+  # Check that these agree:
+    println("x-x_ekep: ",maximum(abs.(x-x_ekep))," v-v_ekep: ",maximum(abs.(v-v_ekep)))
+  end
   xvec[:,i]=x
   vvec[:,i]=v
   # Compute finite difference velocity:

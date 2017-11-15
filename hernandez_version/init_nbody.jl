@@ -57,7 +57,8 @@ for i=1:n_body-1
     end
   end
   # Compute Kepler problem: r is a vector of positions of "body" 2 with respect to "body" 1; rdot is velocity vector
-  r,rdot = kepler_init(t0,m1+m2,elements[i+1,2:5])
+  # For now set inclination to Inclination = pi/2 and longitude of nodes to Omega = pi:
+  r,rdot = kepler_init(t0,m1+m2,[elements[i+1,2:5];pi/2;pi])
   for j=1:NDIM
     rkepler[j,i] = r[j]
     rdotkepler[j,i] = rdot[j]
