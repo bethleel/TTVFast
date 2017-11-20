@@ -380,4 +380,8 @@ much more accurate as well (in the 8-body case;  appears to scale with nbody).
 
 I'm ready to swap ttv_square.jl for ttv.jl, and retire ttv.jl. [x]
 
+11/20/2017
+Got kepler_init working with computing the initial Jacobian.  Still need to
+modify it for the e=0 case. [ ]
 
+Moving on to obtaining full derivative of initial conditions.
