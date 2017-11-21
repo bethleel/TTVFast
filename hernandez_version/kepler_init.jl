@@ -35,11 +35,17 @@ capomega = elements[6]
 # Now, compute the positions
 x = zeros(Float64,3)
 v = zeros(Float64,3)
-coscapomega = cos(capomega) ; sincapomega = sin(capomega)
-#coscapomega = -1.0 ; sincapomega = 0.0
+if abs(capomega-pi) > 1e-15
+  coscapomega = cos(capomega) ; sincapomega = sin(capomega)
+else
+  coscapomega = -1.0 ; sincapomega = 0.0
+end
 cosomegapf = cos(omega+f) ; sinomegapf = sin(omega+f) 
-cosinc = cos(inc) ; sininc = sin(inc)
-#cosinc = 0.0 ; sininc = 1.0
+if abs(inc-pi/2) > 1e-15
+  cosinc = cos(inc) ; sininc = sin(inc)
+else
+  cosinc = 0.0 ; sininc = 1.0
+end
 x[1]=r*(coscapomega*cosomegapf-sincapomega*sinomegapf*cosinc)
 x[2]=r*(sincapomega*cosomegapf+coscapomega*sinomegapf*cosinc)
 x[3]=r*sinomegapf*sininc

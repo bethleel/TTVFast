@@ -8,6 +8,7 @@ t0 = 7257.93115525
 h  = 0.05
 #tmax = 600.0
 tmax = 80.0
+#tmax = 10.0
 
 # Read in initial conditions:
 elements = readdlm("elements.txt",',')
@@ -40,7 +41,7 @@ dtdq0 = zeros(n,maximum(ntt),7,n)
 ttv_elements!(n,t0,h,tmax,elements,tt,count,dtdq0)
 @time ttv_elements!(n,t0,h,tmax,elements,tt,count,dtdq0)
 @time ttv_elements!(n,t0,h,tmax,elements,tt,count,dtdq0)
-read(STDIN,Char)
+#read(STDIN,Char)
 
 # Check that this is working properly:
 for i=1:n
@@ -48,11 +49,12 @@ for i=1:n
     println(i," ",j," ",tt[i,j]," ",tt2[i,j]," ",tt[i,j]-tt2[i,j]," ",tt1[i,j]-tt2[i,j])
   end
 end
-read(STDIN,Char)
+#read(STDIN,Char)
 
 # Compute derivatives numerically:
 nq = 15
 dtdq0_num = zeros(n,maximum(ntt),7,n,nq)
+# This "summarizes" best numerical derivative:
 dtdq0_sum = zeros(n,maximum(ntt),7,n)
 itdq0 = zeros(Int64,n,maximum(ntt),7,n)
 dlnq = [1e-2,3.16e-3,1e-3,3.16e-4,1e-4,3.16e-5,1e-5,3.16e-6,1e-6,3.16e-7,1e-7,3.16e-8,1e-8,3.16e-9,1e-9]
@@ -63,6 +65,9 @@ for jq=1:n
       dq_plus = ttv_elements!(n,t0,h,tmax,elements2,tt2,count2,dlnq[inq],iq,jq)
       elements3  = copy(elements)
       dq_minus = ttv_elements!(n,t0,h,tmax,elements3,tt3,count3,-dlnq[inq],iq,jq)
+#      if iq == 2 || iq == 5
+#       println("timing difference: ",iq," ",maximum(abs.(tt2-tt3)))
+#      end
       for i=1:n
         for k=1:count2[i]
 #          dtdq0_num[i,k,iq,jq,inq] = (tt2[i,k]-tt1[i,k])/dq
@@ -102,10 +107,14 @@ end
 
 using PyPlot
 
-nderiv = n^2*7*maximum(ntt)
-loglog(abs.(reshape(dtdq0,nderiv)),abs.(reshape(dtdq0_sum,nderiv)),".")
-loglog(abs.(reshape(dtdq0,nderiv)),abs.(reshape(dtdq0-dtdq0_sum,nderiv)),".")
-loglog(abs.(reshape(dtdq0,nderiv)),abs.(reshape(dtdq0_sum./dtdq0-1.,nderiv)),".")
+#nderiv = n^2*7*maximum(ntt)
+nderiv = n^2*5*maximum(ntt)
+mask = ones(Bool, dtdq0)
+mask[:,:,2,:] = false
+mask[:,:,5,:] = false
+loglog(abs.(reshape(dtdq0[mask],nderiv)),abs.(reshape(dtdq0_sum[mask],nderiv)),".")
+loglog(abs.(reshape(dtdq0[mask],nderiv)),abs.(reshape(dtdq0[mask]-dtdq0_sum[mask],nderiv)),".")
+loglog(abs.(reshape(dtdq0[mask],nderiv)),abs.(reshape(dtdq0_sum[mask]./dtdq0[mask]-1.,nderiv)),".")
 
 
 ## Make a plot of some TTVs:
