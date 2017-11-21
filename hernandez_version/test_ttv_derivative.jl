@@ -97,24 +97,32 @@ end
 
 nbad = 0
 ntot = 0
+diff_dtdq0 = zeros(n,maximum(ntt),7,n)
 for i=2:n, j=1:count[i], k=1:7, l=1:n
   if abs(dtdq0[i,j,k,l]-dtdq0_sum[i,j,k,l]) > 0.1*abs(dtdq0[i,j,k,l]) && ~(abs(dtdq0[i,j,k,l]) == 0.0  && abs(dtdq0_sum[i,j,k,l]) < 1e-3)
     println(i," ",j," ",k," ",l," ",dtdq0[i,j,k,l]," ",dtdq0_sum[i,j,k,l]," ",itdq0[i,j,k,l])
     nbad +=1
+  end
+  if dtdq0[i,j,k,l] != 0.0
+    diff_dtdq0[i,j,k,l] = minimum([abs(dtdq0[i,j,k,l]-dtdq0_sum[i,j,k,l]);abs(dtdq0_sum[i,j,k,l]/dtdq0[i,j,k,l]-1.0)])
+  else
+    diff_dtdq0[i,j,k,l] = abs(dtdq0[i,j,k,l]-dtdq0_sum[i,j,k,l])
   end
   ntot +=1
 end
 
 using PyPlot
 
-#nderiv = n^2*7*maximum(ntt)
-nderiv = n^2*5*maximum(ntt)
-mask = ones(Bool, dtdq0)
-mask[:,:,2,:] = false
-mask[:,:,5,:] = false
-loglog(abs.(reshape(dtdq0[mask],nderiv)),abs.(reshape(dtdq0_sum[mask],nderiv)),".")
-loglog(abs.(reshape(dtdq0[mask],nderiv)),abs.(reshape(dtdq0[mask]-dtdq0_sum[mask],nderiv)),".")
-loglog(abs.(reshape(dtdq0[mask],nderiv)),abs.(reshape(dtdq0_sum[mask]./dtdq0[mask]-1.,nderiv)),".")
+nderiv = n^2*7*maximum(ntt)
+#nderiv = n^2*5*maximum(ntt)
+#mask = ones(Bool, dtdq0)
+#mask[:,:,2,:] = false
+#mask[:,:,5,:] = false
+#loglog(abs.(reshape(dtdq0[mask],nderiv)),abs.(reshape(dtdq0_sum[mask],nderiv)),".")
+loglog(abs.(reshape(dtdq0,nderiv)),abs.(reshape(dtdq0_sum,nderiv)),".")
+#loglog(abs.(reshape(dtdq0[mask],nderiv)),abs.(reshape(dtdq0[mask]-dtdq0_sum[mask],nderiv)),".")
+loglog(abs.(reshape(dtdq0,nderiv)),abs.(reshape(diff_dtdq0,nderiv)),".")
+#loglog(abs.(reshape(dtdq0[mask],nderiv)),abs.(reshape(dtdq0_sum[mask]./dtdq0[mask]-1.,nderiv)),".")
 
 
 ## Make a plot of some TTVs:
