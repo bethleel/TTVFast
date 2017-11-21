@@ -20,6 +20,7 @@ include("kepler_init.jl")
 #  - We compute the N-body positions with each Keplerian connection (one at each level), starting
 #    at the bottom and moving upwards.
 #  
+
 function init_nbody(elements,t0,n_body)
 # the "_plane" is to remind us that this is currently plane-parallel, so inclination & Omega are zero
 n_level = n_body-1
@@ -74,9 +75,12 @@ for i=1:n_body-1
   end
 end
 mtot = sum(mass)
+# Final row is for center-of-mass of system:
 for j=1:n_body
   amat[n_body,j] = mass[j]/mtot
 end
+# Compute inverse of A matrix to convert from Keplerian coordinates
+# to Cartesian coordinates:
 ainv = inv(amat)
 # Now, compute the Cartesian coordinates (eqn A6 from HPZ16):
 x = zeros(Float64,NDIM,n_body)
@@ -90,6 +94,7 @@ for i=1:n_body
   end
 end
 #v = *(ainv,rdotkepler)
+# Return the cartesian position & velocity matrices:
 return x,v
 end
 
