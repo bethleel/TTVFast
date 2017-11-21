@@ -32,7 +32,7 @@ dq = ttv_elements!(n,t0,h,tmax,elements,tt1,count1,0.0,0,0)
 count2 = zeros(Int64,n)
 count3 = zeros(Int64,n)
 dq = ttv_elements!(n,t0,h/10.,tmax,elements,tt2,count2,0.0,0,0)
-println("Timing error: ",maximum(abs.(tt2-tt1)))
+println("Timing error: ",maximum(abs.(tt2-tt1))*24.*3600.)
 
 # Now, compute derivatives (with respect to initial cartesian positions/masses):
 dtdq0 = zeros(n,maximum(ntt),7,n)

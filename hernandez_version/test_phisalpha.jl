@@ -27,7 +27,7 @@ ssave = zeros(Float64,n,n,2)
 # Predict values of s:
 spred = zeros(Float64,n,n)
 
-jac_step = zeros(7,n,7,n)
+jac_step = zeros(7*n,7*n)
 
 for k=1:n
   m[k] = elements[k,1]
@@ -60,7 +60,7 @@ vsave = copy(v)
 msave = copy(m)
 
 # Now compute numerical derivatives:
-jac_step_num = zeros(7,n,7,n)
+jac_step_num = zeros(7*n,7*n)
 # Vary the initial parameters of planet j:
 for j=1:n
   # Vary the initial phase-space elements:
@@ -80,8 +80,8 @@ for j=1:n
   # Now x & v are final positions & velocities after time step
     for i=1:n
       for k=1:3
-        jac_step_num[  k, i, jj, j] = (x[k,i]-xsave[k,i])/dq
-        jac_step_num[3+k, i, jj, j] = (v[k,i]-vsave[k,i])/dq
+        jac_step_num[(i-1)*7+  k,(j-1)*7+jj] = (x[k,i]-xsave[k,i])/dq
+        jac_step_num[(i-1)*7+3+k,(j-1)*7+jj] = (v[k,i]-vsave[k,i])/dq
       end
     end
     x=copy(x0)
@@ -97,8 +97,8 @@ for j=1:n
     phisalpha!(x,v,h,m,alpha,n)
     for i=1:n
       for k=1:3
-        jac_step_num[  k,i,3+jj,j] = (x[k,i]-xsave[k,i])/dq
-        jac_step_num[3+k,i,3+jj,j] = (v[k,i]-vsave[k,i])/dq
+        jac_step_num[(i-1)*7+  k,(j-1)*7+3+jj] = (x[k,i]-xsave[k,i])/dq
+        jac_step_num[(i-1)*7+3+k,(j-1)*7+3+jj] = (v[k,i]-vsave[k,i])/dq
       end
     end
   end
@@ -111,11 +111,11 @@ for j=1:n
   phisalpha!(x,v,h,m,alpha,n)
   for i=1:n
     for k=1:3
-      jac_step_num[  k,i,7,j] = (x[k,i]-xsave[k,i])/dq
-      jac_step_num[3+k,i,7,j] = (v[k,i]-vsave[k,i])/dq
+      jac_step_num[(i-1)*7+  k,j*7] = (x[k,i]-xsave[k,i])/dq
+      jac_step_num[(i-1)*7+3+k,j*7] = (v[k,i]-vsave[k,i])/dq
     end
     # Mass unchanged -> identity
-    jac_step_num[7,i,7,i] = 1.0
+    jac_step_num[7*i,7*i] = 1.0
   end
 end
 
@@ -126,7 +126,19 @@ end
 for j=1:3
   for i=1:7
     for k=1:3
-      println(jac_step[i,j,:,k]," ",jac_step_num[i,j,:,k]," ",jac_step[i,j,:,k]./jac_step_num[i,j,:,k]-1.)
+      println(jac_step[(j-1)*7+i,(k-1)*7+1:7*k]," ",jac_step_num[(j-1)*7+i,(k-1)*7+1:7*k]," ",jac_step_num[(j-1)*7+i,(k-1)*7+1:7*k]./jac_step[(j-1)*7+i,(k-1)*7+1:7*k]-1.)
     end
   end
 end
+
+jacmax = 0.0
+for i=1:7, j=1:3, k=1:7, l=1:3
+  if jac_step[(j-1)*7+i,(l-1)*7+k] != 0
+    diff = minimum([abs(jac_step_num[(j-1)*7+i,(l-1)*7+k]/jac_step[(j-1)*7+i,(l-1)*7+k]-1.0);jac_step_num[(j-1)*7+i,(l-1)*7+k]-jac_step[(j-1)*7+i,(l-1)*7+k]])
+    if diff > jacmax
+      jacmax = diff
+    end
+  end
+end
+
+println("Maximum error: ",jacmax)

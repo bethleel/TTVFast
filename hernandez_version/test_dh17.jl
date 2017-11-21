@@ -2,12 +2,13 @@
 
 include("ttv.jl")
 
-#function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,jac_step::Array{Float64,4})
+#function dh17!(x::Array{Float64,2},v::Array{Float64,2},h::Float64,m::Array{Float64,1},n::Int64,jac_step::Array{Float64,2})
 
 
 # Next, try computing three-body Keplerian Jacobian:
 
 n = 8
+#n = 3
 #n = 2
 t0 = 7257.93115525
 #h  = 0.05
@@ -27,13 +28,8 @@ v0=zeros(3,n)
 
 # Predict values of s:
 
-jac_step = zeros(7,n,7,n)
 # Initialize with identity matrix:
-for i=1:7
-  for j=1:n
-    jac_step[i,j,i,j] = 1.0
-  end
-end
+jac_step = eye(Float64,7*n)
 
 for k=1:n
   m[k] = elements[k,1]
@@ -74,69 +70,104 @@ msave = copy(m)
 #println("x/v difference: ",x-xtest,v-vtest)
 
 # Now compute numerical derivatives:
-jac_step_num = zeros(7,n,7,n)
+jac_step_num = zeros(7*n,7*n)
 # Vary the initial parameters of planet j:
 for j=1:n
   # Vary the initial phase-space elements:
   for jj=1:3
   # Initial positions, velocities & masses:
-    x = copy(x0)
-    v = copy(v0)
-    m = copy(m0)
-    dq = dlnq * x[jj,j]
-    if x[jj,j] != 0.0
-      x[jj,j] +=  dq
+    xm = copy(x0)
+    vm = copy(v0)
+    mm = copy(m0)
+    dq = dlnq * xm[jj,j]
+    if xm[jj,j] != 0.0
+      xm[jj,j] -=  dq
     else
       dq = dlnq
-      x[jj,j] = dq
+      xm[jj,j] = -dq
     end
     for istep=1:nstep
-      dh17!(x,v,h,m,n)
+      dh17!(xm,vm,h,mm,n)
+    end
+    xp = copy(x0)
+    vp = copy(v0)
+    mp = copy(m0)
+    dq = dlnq * xp[jj,j]
+    if xp[jj,j] != 0.0
+      xp[jj,j] +=  dq
+    else
+      dq = dlnq
+      xp[jj,j] = dq
+    end
+    for istep=1:nstep
+      dh17!(xp,vp,h,mp,n)
     end
   # Now x & v are final positions & velocities after time step
     for i=1:n
       for k=1:3
-        jac_step_num[  k, i, jj, j] = (x[k,i]-xsave[k,i])/dq
-        jac_step_num[3+k, i, jj, j] = (v[k,i]-vsave[k,i])/dq
+        jac_step_num[(i-1)*7+  k,(j-1)*7+ jj] = .5*(xp[k,i]-xm[k,i])/dq
+        jac_step_num[(i-1)*7+3+k,(j-1)*7+ jj] = .5*(vp[k,i]-vm[k,i])/dq
       end
     end
-    x=copy(x0)
-    v=copy(v0)
-    m=copy(m0)
-    dq = dlnq * v[jj,j]
-    if v[jj,j] != 0.0
-      v[jj,j] +=  dq
+  # Next velocity derivatives:
+    xm=copy(x0)
+    vm=copy(v0)
+    mm=copy(m0)
+    dq = dlnq * vm[jj,j]
+    if vm[jj,j] != 0.0
+      vm[jj,j] -=  dq
     else
       dq = dlnq
-      v[jj,j] = dq
+      vm[jj,j] = -dq
     end
     for istep=1:nstep
-      dh17!(x,v,h,m,n)
+      dh17!(xm,vm,h,mm,n)
+    end
+    xp=copy(x0)
+    vp=copy(v0)
+    mp=copy(m0)
+    dq = dlnq * vp[jj,j]
+    if vp[jj,j] != 0.0
+      vp[jj,j] +=  dq
+    else
+      dq = dlnq
+      vp[jj,j] = dq
+    end
+    for istep=1:nstep
+      dh17!(xp,vp,h,mp,n)
     end
     for i=1:n
       for k=1:3
-        jac_step_num[  k,i,3+jj,j] = (x[k,i]-xsave[k,i])/dq
-        jac_step_num[3+k,i,3+jj,j] = (v[k,i]-vsave[k,i])/dq
+        jac_step_num[(i-1)*7+  k,(j-1)*7+3+jj] = .5*(xp[k,i]-xm[k,i])/dq
+        jac_step_num[(i-1)*7+3+k,(j-1)*7+3+jj] = .5*(vp[k,i]-vm[k,i])/dq
       end
     end
   end
 # Now vary mass of planet:
-  x=copy(x0)
-  v=copy(v0)
-  m=copy(m0)
-  dq = m[j]*dlnq
-  m[j] += dq
+  xm=copy(x0)
+  vm=copy(v0)
+  mm=copy(m0)
+  dq = mm[j]*dlnq
+  mm[j] -= dq
   for istep=1:nstep
-    dh17!(x,v,h,m,n)
+    dh17!(xm,vm,h,mm,n)
+  end
+  xp=copy(x0)
+  vp=copy(v0)
+  mp=copy(m0)
+  dq = mp[j]*dlnq
+  mp[j] += dq
+  for istep=1:nstep
+    dh17!(xp,vp,h,mp,n)
   end
   for i=1:n
     for k=1:3
-      jac_step_num[  k,i,7,j] = (x[k,i]-xsave[k,i])/dq
-      jac_step_num[3+k,i,7,j] = (v[k,i]-vsave[k,i])/dq
+      jac_step_num[(i-1)*7+  k,j*7] = .5*(xp[k,i]-xm[k,i])/dq
+      jac_step_num[(i-1)*7+3+k,j*7] = .5*(vp[k,i]-vm[k,i])/dq
     end
   end
   # Mass unchanged -> identity
-  jac_step_num[7,j,7,j] = 1.0
+  jac_step_num[j*7,j*7] = 1.0
 end
 
 # Now, compare the results:
@@ -146,8 +177,7 @@ end
 for j=1:n
   for i=1:7
     for k=1:n
-      println(i," ",j," ",k," ",jac_step[i,j,:,k]," ",jac_step_num[i,j,:,k]," ",jac_step[i,j,:,k]./jac_step_num[i,j,:,k]-1.)
-#      println(i," ",j," 7 ",k," ",jac_step[i,j,7,k]," ",jac_step_num[i,j,7,k]," ",jac_step[i,j,7,k]./jac_step_num[i,j,7,k]-1.)
+      println(i," ",j," ",k," ",jac_step[(j-1)*7+i,(k-1)*7+1:k*7]," ",jac_step_num[(j-1)*7+i,(k-1)*7+1:k*7]," ",jac_step[(j-1)*7+i,(k-1)*7+1:7*k]./jac_step_num[(j-1)*7+i,(k-1)*7+1:7*k]-1.)
     end
   end
 end
@@ -155,8 +185,8 @@ end
 jacmax = 0.0
 
 for i=1:7, j=1:3, k=1:7, l=1:3
-  if jac_step[i,j,k,l] != 0
-    diff = abs(jac_step_num[i,j,k,l]/jac_step[i,j,k,l]-1.0)
+  if jac_step[(j-1)*7+i,(l-1)*7+k] != 0
+    diff = abs(jac_step_num[(j-1)*7+i,(l-1)*7+k]/jac_step[(j-1)*7+i,(l-1)*7+k]-1.0)
     if diff > jacmax
       jacmax = diff
     end

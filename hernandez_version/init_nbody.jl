@@ -59,7 +59,8 @@ for i=1:n_body-1
   end
   # Compute Kepler problem: r is a vector of positions of "body" 2 with respect to "body" 1; rdot is velocity vector
   # For now set inclination to Inclination = pi/2 and longitude of nodes to Omega = pi:
-  r,rdot = kepler_init(t0,m1+m2,[elements[i+1,2:5];pi/2;pi])
+#  r,rdot = kepler_init(t0,m1+m2,[elements[i+1,2:5];pi/2;pi])
+  r,rdot = kepler_init(t0,m1+m2,elements[i+1,2:7])
   for j=1:NDIM
     rkepler[j,i] = r[j]
     rdotkepler[j,i] = rdot[j]
@@ -95,29 +96,8 @@ for i=1:n_body
 end
 #v = *(ainv,rdotkepler)
 # Return the cartesian position & velocity matrices:
+#return x,v,amat,ainv
 return x,v
-end
-
-function get_indices_planetary(n_body)
-# This sets up a planetary-hierarchy index matrix
-indices = zeros(Int64,n_body,n_body)
-for i=1:n_body-1
- for j=1:i
-  indices[i,j ]=-1
- end
- indices[i,i+1]= 1
- indices[n_body,i]=1
-end
-# This is an example for TRAPPIST-1
-# indices = [[-1, 1, 0, 0, 0, 0, 0, 0],  # first two bodies orbit in a binary
-#            [-1,-1, 1, 0, 0, 0, 0, 0],  # next planet orbits about these
-#            [-1,-1,-1, 1, 0, 0, 0, 0],  # etc...
-#            [-1,-1,-1,-1, 1, 0, 0, 0],
-#            [-1,-1,-1,-1,-1, 1, 0, 0],
-#            [-1,-1,-1,-1,-1,-1, 1, 0],
-#            [-1,-1,-1,-1,-1,-1,-1, 1],
-#            [ 1, 1, 1, 1, 1, 1, 1, 1]  # center of mass of the system
-return indices
 end
 
 # Version including derivatives:
@@ -129,18 +109,21 @@ n_level = n_body-1
 # Output -
 # x: NDIM x n_body array of positions  of each planet.
 # v: NDIM x n_body array of velocities "   "      "
-# jac_init: derivative of cartesian coordinates, (x,v,m) for each planet, with respect to initial conditions
-#  (mass, period, t0, e*cos(omega), e*sin(omega), inclination, Omega) for each planet.
+# jac_init: derivative of cartesian coordinates, (x,v,m) for each body, with respect to initial conditions
+#  (mass, period, t0, e*cos(omega), e*sin(omega), inclination, Omega) for each Keplerian.
 # 
 # Read in the orbital elements:
 # elements = readdlm("elements.txt",',')
 # Initialize N-body for each Keplerian:
 # Get the indices:
 indices = get_indices_planetary(n_body)
+println("Indices: ",indices)
 # Set up "A" matrix (Hamers & Portegies-Zwart 2016) which transforms from
 # cartesian coordinates to Keplerian orbits (we are using opposite sign
 # convention of HPZ16, for example, r_1 = R_2-R_1).
 amat = zeros(Float64,n_body,n_body)
+# Derivative of i,jth element of A matrix with respect to mass of body k:
+damatdm = zeros(Float64,n_body,n_body,n_body)
 # Mass vector:
 mass = vcat(elements[:,1])
 # Set up array for orbital positions of each Keplerian:
@@ -148,9 +131,9 @@ rkepler = zeros(Float64,NDIM,n_body)
 rdotkepler = zeros(Float64,NDIM,n_body)
 # Set up Jacobian for transformation from n_body-1 Keplerian elements & masses
 # to (x,v,m) - the last is center-of-mass, which is taken to be zero.
-jac_kepler = zeros(Float64,(2*NDIM+1)*n_body,7*n_body)
+jac_21 = zeros(Float64,(2*NDIM+1)*n_body,7*n_body)
 # Fill in the A matrix & compute the Keplerian elements:
-for i=1:n_body-1
+for i=1:n_body-1  # i labels the row of matrix, which weights masses in current Keplerian
   # Sums of masses for two components of Keplerian:
   m1 = 0.0
   m2 = 0.0
@@ -163,26 +146,68 @@ for i=1:n_body-1
     end
   end
   # Compute Kepler problem: r is a vector of positions of "body" 2 with respect to "body" 1; rdot is velocity vector
-  r,rdot = kepler_init(t0,m1+m2,[elements[i+1,2:5];pi/2;pi],jac_21)
+  r,rdot = kepler_init(t0,m1+m2,elements[i+1,2:7],jac_21)
   for j=1:NDIM
     rkepler[j,i] = r[j]
     rdotkepler[j,i] = rdot[j]
   end
-  # Now, fill in the A matrix
+  # Now, fill in the A matrix:
   for j=1:n_body
     if indices[i,j] == 1
       amat[i,j] = -mass[j]/m1
+      damatdm[i,j,j] += -1.0/m1
+      for k=1:n_body
+        if indices[i,k] == 1
+          damatdm[i,j,k] += mass[j]/m1^2
+        end
+      end
     end
     if indices[i,j] == -1
       amat[i,j] =  mass[j]/m2
+      damatdm[i,j,j] +=  1.0/m2
+      for k=1:n_body
+        if indices[i,k] == -1
+          damatdm[i,j,k] -= mass[j]/m2^2
+        end
+      end
     end
   end
 end
 mtot = sum(mass)
 for j=1:n_body
   amat[n_body,j] = mass[j]/mtot
+  damatdm[n_body,j,j] = 1.0/mtot
+  for k=1:n_body
+    damatdm[n_body,j,k] -= mass[j]/mtot^2
+  end
 end
 ainv = inv(amat)
+# Propagate mass uncertainties (11/17/17 notes):
+dainvdm = zeros(Float64,n_body,n_body,n_body)
+#dainvdm_num = zeros(Float64,n_body,n_body,n_body)
+#damatdm_num = zeros(Float64,n_body,n_body,n_body)
+#dlnq = 2e-3
+#elements_tmp = zeros(Float64,n_body,7)
+for k=1:n_body
+  dainvdm[:,:,k]=-ainv*damatdm[:,:,k]*ainv
+# Compute derivatives numerically:
+#  elements_tmp = copy(elements)
+#  elements_tmp .= elements
+#  elements_tmp[k,1] *= (1.0-dlnq)
+#  x_minus,v_minus,amat_minus,ainv_minus = init_nbody(elements_tmp,t0,n_body)
+#  elements_tmp[k,1] *= (1.0+dlnq)/(1.0-dlnq)
+#  x_plus,v_plus,amat_plus,ainv_plus = init_nbody(elements_tmp,t0,n_body)
+#  dainvdm_num[:,:,k] = (ainv_plus.-ainv_minus)/(2dlnq*elements[k,1])
+#  damatdm_num[:,:,k] = (amat_plus.-amat_minus)/(2dlnq*elements[k,1])
+end
+#println("damatdm: ",maximum(abs.(damatdm-damatdm_num)))
+#println("dainvdm: ",maximum(abs.(dainvdm-dainvdm_num)))
+#for k=1:n_body
+#  println("damatdm: ",k," ",abs.(damatdm[k,:,:]-damatdm_num[k,:,:]))
+##  println("damatdm_num: ",k," ",abs.(damatdm_num[k,:,:]))
+#end
+#println("dainvdm: ",abs.(dainvdm))
+#println("dainvdm_num: ",abs.(dainvdm_num))
 # Now, compute the Cartesian coordinates (eqn A6 from HPZ16):
 x = zeros(Float64,NDIM,n_body)
 v = zeros(Float64,NDIM,n_body)
@@ -194,6 +219,7 @@ for i=1:n_body
     end
   end
 end
+
 #v = *(ainv,rdotkepler)
 return x,v
 end
@@ -208,6 +234,7 @@ for i=1:n_body-1
  indices[i,i+1]= 1
  indices[n_body,i]=1
 end
+indices[n_body,n_body]=1
 # This is an example for TRAPPIST-1
 # indices = [[-1, 1, 0, 0, 0, 0, 0, 0],  # first two bodies orbit in a binary
 #            [-1,-1, 1, 0, 0, 0, 0, 0],  # next planet orbits about these

@@ -9,7 +9,8 @@ elements = readdlm("elements.txt",',')
 
 n_body = 8
 t0 = 7257.93115525
-x,v = init_nbody(elements,t0,n_body)
+jac_int = zeros(Float64,7*n_body,7*n_body)
+x,v = init_nbody(elements,t0,n_body,jac_int)
 
 println(x)
 println(v)
