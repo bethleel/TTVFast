@@ -42,8 +42,8 @@ amat = zeros(Float64,n_body,n_body)
 # Mass vector:
 mass = vcat(elements[:,1])
 # Set up array for orbital positions of each Keplerian:
-rkepler = zeros(Float64,NDIM,n_body)
-rdotkepler = zeros(Float64,NDIM,n_body)
+rkepler = zeros(Float64,n_body,NDIM)
+rdotkepler = zeros(Float64,n_body,NDIM)
 # Fill in the A matrix & compute the Keplerian elements:
 for i=1:n_body-1
   # Sums of masses for two components of Keplerian:
@@ -62,8 +62,8 @@ for i=1:n_body-1
 #  r,rdot = kepler_init(t0,m1+m2,[elements[i+1,2:5];pi/2;pi])
   r,rdot = kepler_init(t0,m1+m2,elements[i+1,2:7])
   for j=1:NDIM
-    rkepler[j,i] = r[j]
-    rdotkepler[j,i] = rdot[j]
+    rkepler[i,j] = r[j]
+    rdotkepler[i,j] = rdot[j]
   end
   # Now, fill in the A matrix
   for j=1:n_body
@@ -89,8 +89,8 @@ v = zeros(Float64,NDIM,n_body)
 for i=1:n_body
   for j=1:NDIM
     for k=1:n_body
-      x[j,i] += ainv[i,k]*rkepler[j,k]
-      v[j,i] += ainv[i,k]*rdotkepler[j,k]
+      x[j,i] += ainv[i,k]*rkepler[k,j]
+      v[j,i] += ainv[i,k]*rdotkepler[k,j]
     end
   end
 end
@@ -129,8 +129,8 @@ damatdm = zeros(Float64,n_body,n_body,n_body)
 # Mass vector:
 mass = vcat(elements[:,1])
 # Set up array for orbital positions of each Keplerian:
-rkepler = zeros(Float64,NDIM,n_body)
-rdotkepler = zeros(Float64,NDIM,n_body)
+rkepler = zeros(Float64,n_body,NDIM)
+rdotkepler = zeros(Float64,n_body,NDIM)
 # Set up Jacobian for transformation from n_body-1 Keplerian elements & masses
 # to (x,v,m) - the last is center-of-mass, which is taken to be zero.
 jac_21 = zeros(Float64,7,7)
@@ -152,8 +152,8 @@ for i=1:n_body-1  # i labels the row of matrix, which weights masses in current 
   # Compute Kepler problem: r is a vector of positions of "body" 2 with respect to "body" 1; rdot is velocity vector
   r,rdot = kepler_init(t0,m1+m2,elements[i+1,2:7],jac_21)
   for j=1:NDIM
-    rkepler[j,i] = r[j]
-    rdotkepler[j,i] = rdot[j]
+    rkepler[i,j] = r[j]
+    rdotkepler[i,j] = rdot[j]
   end
   # Save Keplerian Jacobian to a matrix:
   jac_kepler[i,:,:]=jac_21
@@ -220,8 +220,8 @@ v = zeros(Float64,NDIM,n_body)
 for i=1:n_body
   for j=1:NDIM
     for k=1:n_body
-      x[j,i] += ainv[i,k]*rkepler[j,k]
-      v[j,i] += ainv[i,k]*rdotkepler[j,k]
+      x[j,i] += ainv[i,k]*rkepler[k,j]
+      v[j,i] += ainv[i,k]*rdotkepler[k,j]
     end
   end
 end
