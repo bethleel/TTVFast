@@ -86,15 +86,16 @@ ainv = inv(amat)
 # Now, compute the Cartesian coordinates (eqn A6 from HPZ16):
 x = zeros(Float64,NDIM,n_body)
 v = zeros(Float64,NDIM,n_body)
-for i=1:n_body
-  for j=1:NDIM
-    for k=1:n_body
-      x[j,i] += ainv[i,k]*rkepler[k,j]
-      v[j,i] += ainv[i,k]*rdotkepler[k,j]
-    end
-  end
-end
-#v = *(ainv,rdotkepler)
+#for i=1:n_body
+#  for j=1:NDIM
+#    for k=1:n_body
+#      x[j,i] += ainv[i,k]*rkepler[k,j]
+#      v[j,i] += ainv[i,k]*rdotkepler[k,j]
+#    end
+#  end
+#end
+x = transpose(*(ainv,rkepler))
+v = transpose(*(ainv,rdotkepler))
 # Return the cartesian position & velocity matrices:
 #return x,v,amat,ainv
 return x,v
@@ -217,14 +218,16 @@ end
 # Now, compute the Cartesian coordinates (eqn A6 from HPZ16):
 x = zeros(Float64,NDIM,n_body)
 v = zeros(Float64,NDIM,n_body)
-for i=1:n_body
-  for j=1:NDIM
-    for k=1:n_body
-      x[j,i] += ainv[i,k]*rkepler[k,j]
-      v[j,i] += ainv[i,k]*rdotkepler[k,j]
-    end
-  end
-end
+#for i=1:n_body
+#  for j=1:NDIM
+#    for k=1:n_body
+#      x[j,i] += ainv[i,k]*rkepler[k,j]
+#      v[j,i] += ainv[i,k]*rdotkepler[k,j]
+#    end
+#  end
+#end
+x = transpose(*(ainv,rkepler))
+v = transpose(*(ainv,rdotkepler))
 # Finally, compute the overall Jacobian.
 # First, compute it for the orbital elements:
 for i=1:n_body-1
@@ -234,7 +237,6 @@ for i=1:n_body-1
   end
 end
 
-#v = *(ainv,rdotkepler)
 return x,v
 end
 
