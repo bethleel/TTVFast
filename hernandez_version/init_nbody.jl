@@ -111,8 +111,9 @@ n_level = n_body-1
 # x: NDIM x n_body array of positions  of each planet.
 # v: NDIM x n_body array of velocities "   "      "
 # jac_init: derivative of cartesian coordinates, (x,v,m) for each body, with respect to initial conditions
-#  n_body x (period, t0, e*cos(omega), e*sin(omega), inclination, Omega) for each Keplerian, and n_body x masses.
-#jac_init = zeros(Float64,7*n_body,7*(n_body-1)+n_body)
+#  n_body x (period, t0, e*cos(omega), e*sin(omega), inclination, Omega, mass) for each Keplerian, with
+#  the first body having orbital elements set to zero, so the first six derivatives are zero.
+#jac_init = zeros(Float64,7*n_body,7*n_body)
 fill!(jac_init,0.0)
 # 
 # Read in the orbital elements:
@@ -136,7 +137,7 @@ rdotkepler = zeros(Float64,n_body,NDIM)
 # to (x,v,m) - the last is center-of-mass, which is taken to be zero.
 jac_21 = zeros(Float64,7,7)
 # jac_kepler saves jac_21 for each set of bodies:
-jac_kepler = zeros(Float64,n_body-1,7,7)
+jac_kepler = zeros(Float64,n_body*7,n_body*7)
 # Fill in the A matrix & compute the Keplerian elements:
 for i=1:n_body-1  # i labels the row of matrix, which weights masses in current Keplerian
   # Sums of masses for two components of Keplerian:
@@ -157,7 +158,9 @@ for i=1:n_body-1  # i labels the row of matrix, which weights masses in current 
     rdotkepler[i,j] = rdot[j]
   end
   # Save Keplerian Jacobian to a matrix:
-  jac_kepler[i,:,:]=jac_21
+  for j=1:7, k=1:7
+    jac_kepler[j,i*7+k]=jac_21[j,k]
+  end
   # Now, fill in the A matrix:
   for j=1:n_body
     if indices[i,j] == 1
