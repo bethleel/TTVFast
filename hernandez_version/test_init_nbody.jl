@@ -9,11 +9,12 @@ elements = readdlm("elements.txt",',')
 
 n_body = 8
 t0 = 7257.93115525
-jac_int = zeros(Float64,7*n_body,7*n_body)
-x,v = init_nbody(elements,t0,n_body,jac_int)
+jac_init = zeros(Float64,7*n_body,7*n_body)
+x,v = init_nbody(elements,t0,n_body,jac_init)
 
 println(x)
 println(v)
+println(jac_init)
 
 # Estimate orbital periods of planets about the star:
 mass = elements[1,1]

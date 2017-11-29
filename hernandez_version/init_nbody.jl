@@ -103,6 +103,7 @@ end
 
 # Version including derivatives:
 function init_nbody(elements,t0,n_body,jac_init)
+
 # the "_plane" is to remind us that this is currently plane-parallel, so inclination & Omega are zero
 n_level = n_body-1
 # Input -
@@ -121,7 +122,7 @@ fill!(jac_init,0.0)
 # Initialize N-body for each Keplerian:
 # Get the indices:
 indices = get_indices_planetary(n_body)
-println("Indices: ",indices)
+#println("Indices: ",indices)
 # Set up "A" matrix (Hamers & Portegies-Zwart 2016) which transforms from
 # cartesian coordinates to Keplerian orbits (we are using opposite sign
 # convention of HPZ16, for example, r_1 = R_2-R_1).
@@ -137,12 +138,11 @@ rdotkepler = zeros(Float64,n_body,NDIM)
 # to (x,v,m) - the last is center-of-mass, which is taken to be zero.
 jac_21 = zeros(Float64,7,7)
 # jac_kepler saves jac_21 for each set of bodies:
-jac_kepler = zeros(Float64,n_body*7,n_body*7)
+jac_kepler = zeros(Float64,n_body*6,n_body*7)
 # Fill in the A matrix & compute the Keplerian elements:
 for i=1:n_body-1  # i labels the row of matrix, which weights masses in current Keplerian
   # Sums of masses for two components of Keplerian:
-  m1 = 0.0
-  m2 = 0.0
+  m1 = 0.0 ; m2 = 0.0
   for j=1:n_body
     if indices[i,j] == 1
       m1 += mass[j]
@@ -151,15 +151,24 @@ for i=1:n_body-1  # i labels the row of matrix, which weights masses in current 
       m2 += mass[j]
     end
   end
-  # Compute Kepler problem: r is a vector of positions of "body" 2 with respect to "body" 1; rdot is velocity vector
+  # Compute Kepler problem: r is a vector of positions of "body" 2 with respect to "body" 1; rdot is velocity vector:
   r,rdot = kepler_init(t0,m1+m2,elements[i+1,2:7],jac_21)
   for j=1:NDIM
     rkepler[i,j] = r[j]
     rdotkepler[i,j] = rdot[j]
   end
-  # Save Keplerian Jacobian to a matrix:
-  for j=1:7, k=1:7
-    jac_kepler[j,i*7+k]=jac_21[j,k]
+  # Save Keplerian Jacobian to a matrix.  First, positions/velocities vs. elements:
+  for j=1:6, k=1:6
+    jac_kepler[(i-1)*6+j,i*7+k] = jac_21[j,k]
+  end
+  # Now add in mass derivatives:
+  for j=1:n_body
+    # Check which bodies participate in current Keplerian:
+    if indices[i,j] != 0
+      for k=1:6
+        jac_kepler[(i-1)*6+k,j*7] = jac_21[k,7]
+      end
+    end
   end
   # Now, fill in the A matrix:
   for j=1:n_body
@@ -233,11 +242,30 @@ x = transpose(*(ainv,rkepler))
 v = transpose(*(ainv,rdotkepler))
 # Finally, compute the overall Jacobian.
 # First, compute it for the orbital elements:
-for i=1:n_body-1
-  # I don't think this is correct...
-  for j=1:n_body, k=1:7
-#    jac_init[(i-1)*7+1:(i-1)*7+3,(j-1)*7+k] += ainv[]*jac_kepler[,1:3,j]
+dxdm = zeros(Float64,3,n_body); dvdm = zeros(Float64,3,n_body)
+for i=1:n_body
+  # Propagate derivatives of Kepler coordinates with respect to
+  # orbital elements to the Cartesian coordinates:
+  for k=1:n_body
+    for j=1:3, l=1:7*n_body
+      jac_init[(i-1)*7+j,l] += ainv[i,k]*jac_kepler[(k-1)*6+j,l]
+      jac_init[(i-1)*7+3+j,l] += ainv[i,k]*jac_kepler[(k-1)*6+3+j,l]
+    end
   end
+  # Include the mass derivatives of the A matrix:
+#  dainvdm .= -ainv*damatdm[:,:,i]*ainv  # derivative with respect to the ith body
+  # Multiply the derivative time Kepler positions/velocities to convert to
+  # Cartesian coordinates:
+  dxdm = transpose(dainvdm[:,:,i]*rkepler)
+  dvdm = transpose(dainvdm[:,:,i]*rdotkepler)
+  # Cartesian coordinates of all of the bodies can depend on the masses 
+  # of all the others so we need to loop over indices of each body, k:
+  for k=1:n_body
+    jac_init[(i-1)*7+1:(i-1)*7+3,k*7] += dxdm[1:3,k]
+    jac_init[(i-1)*7+4:(i-1)*7+6,k*7] += dvdm[1:3,k]
+  end
+  # Masses are conserved:
+  jac_init[i*7,i*7] = 1.0
 end
 
 return x,v
