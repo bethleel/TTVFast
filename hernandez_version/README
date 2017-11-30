@@ -385,3 +385,7 @@ Got kepler_init working with computing the initial Jacobian.  Still need to
 modify it for the e=0 case. [ ]
 
 Moving on to obtaining full derivative of initial conditions.
+
+11/30/2017
+Okay, initial condition derivative is almost working.  Still have an
+error for the mass derivatives, which needs to be fixed. [ ]

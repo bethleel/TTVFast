@@ -256,13 +256,13 @@ for i=1:n_body
 #  dainvdm .= -ainv*damatdm[:,:,i]*ainv  # derivative with respect to the ith body
   # Multiply the derivative time Kepler positions/velocities to convert to
   # Cartesian coordinates:
-  dxdm = transpose(dainvdm[:,:,i]*rkepler)
-  dvdm = transpose(dainvdm[:,:,i]*rdotkepler)
   # Cartesian coordinates of all of the bodies can depend on the masses 
   # of all the others so we need to loop over indices of each body, k:
   for k=1:n_body
-    jac_init[(i-1)*7+1:(i-1)*7+3,k*7] += dxdm[1:3,k]
-    jac_init[(i-1)*7+4:(i-1)*7+6,k*7] += dvdm[1:3,k]
+    dxdm = transpose(dainvdm[:,:,k]*rkepler)
+    dvdm = transpose(dainvdm[:,:,k]*rdotkepler)
+    jac_init[(i-1)*7+1:(i-1)*7+3,k*7] += dxdm[1:3,i]
+    jac_init[(i-1)*7+4:(i-1)*7+6,k*7] += dvdm[1:3,i]
   end
   # Masses are conserved:
   jac_init[i*7,i*7] = 1.0
