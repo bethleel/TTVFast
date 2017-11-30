@@ -77,10 +77,22 @@ for i=1:n
   m[i] = elements[i,1]
 end
 # Initialize the N-body problem using nested hierarchy of Keplerians:
-#x,v = init_nbody(elements,t0,n,jac_init)
-x,v = init_nbody(elements,t0,n)
+x,v = init_nbody(elements,t0,n,jac_init)
+#x,v = init_nbody(elements,t0,n)
 ttv!(n,t0,h,tmax,m,x,v,tt,count,dtdq0)
-# Need to apply initial jacobian TBD [ ]
+# Need to apply initial jacobian TBD - convert from
+# derivatives with respect to (x,v,m) to (elements,m):
+tmp = zeros(Float64,7,n)
+for i=1:n, j=1:count[i]
+  # Now, multiply 
+  tmp = dtdq0[i,j,:,:]
+  for k=1:n, l=1:7
+    dtdq0[i,j,l,k] = 0.0
+    for p=1:n, q=1:7
+      dtdq0[i,j,l,k] += tmp[q,p]*jac_init[(p-1)*7+q,(k-1)*7+l]
+    end
+  end
+end
 return
 end
 

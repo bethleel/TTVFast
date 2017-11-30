@@ -364,11 +364,12 @@ Things to do:
 2).  Generalize for arbitrary mobile diagram.  [ ]
 3).  Compare with rebound. [ ]
 4).  Check coordinates. [ ]
-5).  Finish derivatives of initial conditions. [ ]
-6).  Allow output of derivatives of coordinates at arbitrary time steps. [ ]
-7).  Have TTV call with cartesian coordinates, and write wrapper for elements. [x]
-8).  Figure out derivatives of kepler_init. [ ]
-9).  Figure out derivatives of nbody_init. [ ]
+5).  Finish derivatives of initial conditions. [x]
+6).  Allow output of derivatives of positions/velocities at arbitrary time steps
+for RV, astrometry, etc. [ ]
+7).  Have TTV call with Cartesian coordinates, and write wrapper for elements. [x]
+8).  Figure out derivatives of kepler_init. [x]
+9).  Figure out derivatives of init_nbody. [x]
 10). Write a differentiable photodynamical model. [ ]
 
 11/14/2017
@@ -388,4 +389,9 @@ Moving on to obtaining full derivative of initial conditions.
 
 11/30/2017
 Okay, initial condition derivative is almost working.  Still have an
-error for the mass derivatives, which needs to be fixed. [ ]
+error for the mass derivatives, which needs to be fixed. [x]
+Mixed up k & i in mass derivatives; fixed init_nbody.jl; now it works!!!
+
+Last step is to multiply derivatives of TTVs wrt initial Cartesian coordinates
+times the Jacobian of the initial Cartesian coordinates wrt orbital elements,
+at which point we'll have the full derivatives. [ ]

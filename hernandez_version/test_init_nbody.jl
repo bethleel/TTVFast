@@ -7,7 +7,7 @@ include("init_nbody.jl")
 
 elements = readdlm("elements.txt",',')
 
-n_body = 3
+n_body = 4
 t0 = 7257.93115525
 jac_init     = zeros(Float64,7*n_body,7*n_body)
 jac_init_num = zeros(Float64,7*n_body,7*n_body)

@@ -1,6 +1,8 @@
 include("ttv.jl")
 include("/Users/ericagol/Computer/Julia/regress.jl")
 
+# This routine takes derivative of transit times with respect
+# to the initial orbital elements.
 #n = 8
 n = 3
 t0 = 7257.93115525
