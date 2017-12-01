@@ -77,6 +77,7 @@ for i=1:n
   m[i] = elements[i,1]
 end
 # Initialize the N-body problem using nested hierarchy of Keplerians:
+jac_init     = zeros(Float64,7*n,7*n)
 x,v = init_nbody(elements,t0,n,jac_init)
 #x,v = init_nbody(elements,t0,n)
 ttv!(n,t0,h,tmax,m,x,v,tt,count,dtdq0)
@@ -84,7 +85,7 @@ ttv!(n,t0,h,tmax,m,x,v,tt,count,dtdq0)
 # derivatives with respect to (x,v,m) to (elements,m):
 tmp = zeros(Float64,7,n)
 for i=1:n, j=1:count[i]
-  # Now, multiply 
+  # Now, multiply by the initial Jacobian to convert time derivatives to orbital elements:
   tmp = dtdq0[i,j,:,:]
   for k=1:n, l=1:7
     dtdq0[i,j,l,k] = 0.0
